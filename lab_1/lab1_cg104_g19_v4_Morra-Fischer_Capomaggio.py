@@ -6,7 +6,7 @@ from matplotlib import cm
 def function(x, y):
     return 2 * np.sin(x) + 3 * np.cos(y)
 
-
+# 2cosx + 3
 def newton_method(initial_guess, alpha, tol=1e-6, max_iter=1000):
     """
     Newton method
@@ -18,6 +18,11 @@ def newton_method(initial_guess, alpha, tol=1e-6, max_iter=1000):
     - max_iter: maximum number of iterations
 
     """
+
+    dx, dy = 0
+    current_guess = initial_guess
+    for i in range (1000):
+        dx, dy = np.gradient(function(current_guess[0], current_guess[1]), current_guess[0], current_guess[1])
 
 
 def visualize():
