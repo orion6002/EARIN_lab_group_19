@@ -31,6 +31,7 @@ def newton_method(initial_guess, alpha, tol=1e-6, max_iter=1000):
             -3 * np.sin(y)
         ])
 
+        # Compute the norm of the gradient and check if greater than the tol to continue.
         grad_norm = np.linalg.norm(gradient)
         if grad_norm < tol:
             return current_guess.tolist(), i, path
@@ -42,8 +43,7 @@ def newton_method(initial_guess, alpha, tol=1e-6, max_iter=1000):
         ])
 
         det_hessian = np.linalg.det(hessian)
-        # Stop if the Hessian is too close to singular, because Newton's step
-        # cannot be computed reliably in that case.
+        # Stop if the Hessian is too close to singular.
         if abs(det_hessian) < 1e-10:
             return current_guess.tolist(), i, path
         
@@ -107,6 +107,7 @@ def visualize(examples):
     plt.tight_layout()
     plt.show()
 
+# List of example of inital guess.
 examples = [
     {"initial_guess": [4.0, 4.0], "alpha": 0.1},
     {"initial_guess": [2.0, 2.0], "alpha": 0.3},
