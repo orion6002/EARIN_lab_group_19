@@ -18,7 +18,7 @@ class CSP:
 		self.domains = domains 
 		self.constraints = constraints 
 		self.solution = None
-		self.viz = None
+		self.viz = []
 
 	@staticmethod
 	def print_sudoku(puzzle): 
@@ -32,7 +32,19 @@ class CSP:
 			print() 
 
 	def visualize(self):
-		return 0
+		if not self.viz:
+			print("No visualization steps recorded")
+			return
+
+		print("\n" + "=" * 10 + " Visualization " + "=" * 10)
+		for step_number, step in enumerate(self.viz, start=1):
+			action = step["action"]
+			var = step["var"]
+			value = step["value"]
+			board = step["board"]
+			print(f"Step {step_number}: {action} {value} at cell {var}")
+			self.print_sudoku(board)
+			print()
 
 	def solve(self): 
 		assignment = {} 
@@ -58,12 +70,60 @@ class CSP:
 					return False
 		return True
 	
+	# Validate the input puzzle
+	@staticmethod
+	def validate_input(puzzle):
+		if len(puzzle) != 9:
+			return False
+
+		for row in puzzle:
+			if len(row) != 9:
+				return False
+			for val in row:
+				if not isinstance(val, int) or val < 0 or val > 9:
+					return False
+
+		# Check duplicates in rows
+		for row in puzzle:
+			values = [val for val in row if val != 0]
+			if len(values) != len(set(values)):
+				return False
+
+		# Check duplicates in columns
+		for col in range(9):
+			values = []
+			for row in range(9):
+				if puzzle[row][col] != 0:
+					values.append(puzzle[row][col])
+			if len(values) != len(set(values)):
+				return False
+
+		# Check duplicates in 3x3 blocks
+		for start_row in range(0, 9, 3):
+			for start_col in range(0, 9, 3):
+				values = []
+				for row in range(start_row, start_row + 3):
+					for col in range(start_col, start_col + 3):
+						if puzzle[row][col] != 0:
+							values.append(puzzle[row][col])
+				if len(values) != len(set(values)):
+					return False
+
+		return True
+
 	# Verify if the value is not already assigned to a neighbor
 	def is_consistent(self, var, value, assignment):
 		for neighbor in self.constraints[var]:
 			if neighbor in assignment and assignment[neighbor] == value:
 				return False
 		return True
+	
+	# Build the board for visualization based on the current assignment
+	def build_board(self, assignment):
+		board = [row[:] for row in puzzle]
+		for (i, j), value in assignment.items():
+			board[i][j] = value
+		return board
 	  
 	def backtrack(self, assignment, domains): 
 		"""
@@ -91,6 +151,13 @@ class CSP:
 			if self.is_consistent(current_var, value, assignment):
 				assignment[current_var] = value
 				
+				self.viz.append({
+					"action": "assign",
+					"var": current_var,
+					"value": value,
+					"board": self.build_board(assignment)
+				})
+
 				domains_copy = {v: domains[v][:] for v in domains}
 
 				domains_copy[current_var] = [value]
@@ -102,12 +169,19 @@ class CSP:
 					result = self.backtrack(assignment, domains_copy)
 					if result is not None:
 						return result
-					
+				
+				self.viz.append({
+					"action": "backtrack from",
+					"var": current_var,
+					"value": value,
+					"board": self.build_board({k: v for k, v in assignment.items() if k != current_var})
+				})
+
 				del assignment[current_var]
 			
 		return None
 
-puzzle = [[5, 3, 0, 0, 7, 0, 0, 0, 0], 
+puzzle = [[5, 5, 0, 0, 7, 0, 0, 0, 0], 
 		  [0, 0, 0, 1, 0, 5, 0, 0, 0], 
 		  [0, 9, 8, 0, 0, 0, 0, 6, 0], 
 		  [0, 0, 0, 0, 0, 3, 0, 0, 1], 
@@ -117,6 +191,12 @@ puzzle = [[5, 3, 0, 0, 7, 0, 0, 0, 0],
 		  [0, 0, 0, 0, 0, 0, 0, 1, 0], 
 		  [0, 0, 0, 0, 0, 0, 4, 0, 0] 
 		] 	
+
+# Validate the input puzzle
+if not CSP.validate_input(puzzle):
+	print("Invalid puzzle")
+	exit()
+
 # Based on the puzzle create variables, domains, and constraints for initialization of CSP class
 
 variables = [(i, j) for i in range(9) for j in range(9) if puzzle[i][j] == 0]
@@ -176,10 +256,10 @@ print('*'*7,'Solution','*'*7)
 csp = CSP(variables, domains, constraints) 
 sol = csp.solve() 
 csp.print_sudoku(puzzle)
-solution = [[0 for i in range(9)] for i in range(9)] 
+solution = [row[:] for row in puzzle]
 if sol is not None:
-	for i,j in sol: 
-		solution[i][j]=sol[i,j] 
+	for (i, j), value in sol.items():
+		solution[i][j] = value
 		
 	csp.print_sudoku(solution)
 	csp.visualize()
