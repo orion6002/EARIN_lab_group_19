@@ -181,87 +181,123 @@ class CSP:
 			
 		return None
 
-puzzle = [[5, 5, 0, 0, 7, 0, 0, 0, 0], 
-		  [0, 0, 0, 1, 0, 5, 0, 0, 0], 
-		  [0, 9, 8, 0, 0, 0, 0, 6, 0], 
-		  [0, 0, 0, 0, 0, 3, 0, 0, 1], 
-		  [0, 0, 0, 0, 0, 0, 0, 0, 6], 
-		  [0, 0, 0, 0, 0, 0, 2, 8, 0], 
-		  [0, 0, 0, 0, 0, 0, 0, 0, 8], 
-		  [0, 0, 0, 0, 0, 0, 0, 1, 0], 
-		  [0, 0, 0, 0, 0, 0, 4, 0, 0] 
-		] 	
+TEST_CASES = {
+	"valid_standard": [
+		[5, 3, 0, 0, 7, 0, 0, 0, 0],
+		[0, 0, 0, 1, 0, 5, 0, 0, 0],
+		[0, 9, 8, 0, 0, 0, 0, 6, 0],
+		[0, 0, 0, 0, 0, 3, 0, 0, 1],
+		[0, 0, 0, 0, 0, 0, 0, 0, 6],
+		[0, 0, 0, 0, 0, 0, 2, 8, 0],
+		[0, 0, 0, 0, 0, 0, 0, 0, 8],
+		[0, 0, 0, 0, 0, 0, 0, 1, 0],
+		[0, 0, 0, 0, 0, 0, 4, 0, 0]
+	],
+	"already_solved": [
+		[5, 3, 4, 6, 7, 8, 9, 1, 2],
+		[6, 7, 2, 1, 9, 5, 3, 4, 8],
+		[1, 9, 8, 3, 4, 2, 5, 6, 7],
+		[8, 5, 9, 7, 6, 1, 4, 2, 3],
+		[4, 2, 6, 8, 5, 3, 7, 9, 1],
+		[7, 1, 3, 9, 2, 4, 8, 5, 6],
+		[9, 6, 1, 5, 3, 7, 2, 8, 4],
+		[2, 8, 7, 4, 1, 9, 6, 3, 5],
+		[3, 4, 5, 2, 8, 6, 1, 7, 9]
+	],
+	"invalid_duplicate": [
+		[5, 5, 0, 0, 7, 0, 0, 0, 0],
+		[0, 0, 0, 1, 0, 5, 0, 0, 0],
+		[0, 9, 8, 0, 0, 0, 0, 6, 0],
+		[0, 0, 0, 0, 0, 3, 0, 0, 1],
+		[0, 0, 0, 0, 0, 0, 0, 0, 6],
+		[0, 0, 0, 0, 0, 0, 2, 8, 0],
+		[0, 0, 0, 0, 0, 0, 0, 0, 8],
+		[0, 0, 0, 0, 0, 0, 0, 1, 0],
+		[0, 0, 0, 0, 0, 0, 4, 0, 0]
+	],
+	"invalid_size": [
+		[1, 2, 3],
+		[4, 5, 6],
+		[7, 8, 9]
+	]
+}
 
-# Validate the input puzzle
-if not CSP.validate_input(puzzle):
-	print("Invalid puzzle")
-	exit()
+def run_test_case(test_name, show_visualization=False):
+	puzzle = TEST_CASES[test_name]
 
-# Based on the puzzle create variables, domains, and constraints for initialization of CSP class
+	print("\n" + "=" * 10 + f" {test_name} " + "=" * 10)
 
-variables = [(i, j) for i in range(9) for j in range(9) if puzzle[i][j] == 0]
+	if not CSP.validate_input(puzzle):
+		print("Invalid puzzle")
+		return
 
-domains = {}
-for var in variables:
-	i, j = var
-	used = set()
+	variables = [(i, j) for i in range(9) for j in range(9) if puzzle[i][j] == 0]
 
-	# row
-	for col in range(9):
-		if puzzle[i][col] != 0:
-			used.add(puzzle[i][col])
+	domains = {}
+	for var in variables:
+		i, j = var
+		used = set()
 
-    # column
-	for row in range(9):
-		if puzzle[row][j] != 0:
-			used.add(puzzle[row][j])
+		for col in range(9):
+			if puzzle[i][col] != 0:
+				used.add(puzzle[i][col])
 
-    # block 3x3
-	start_row = (i // 3) * 3
-	start_col = (j // 3) * 3
-	for row in range(start_row, start_row + 3):
-		for col in range(start_col, start_col + 3):
-			if puzzle[row][col] != 0:
-				used.add(puzzle[row][col])
-	
-	# Delete every neighbors values from the domain
-	domains[var] = [v for v in range(1, 10) if v not in used]
+		for row in range(9):
+			if puzzle[row][j] != 0:
+				used.add(puzzle[row][j])
 
-constraints = {}
-for var in variables:
-    i, j = var
-    neighbors = set()
+		start_row = (i // 3) * 3
+		start_col = (j // 3) * 3
+		for row in range(start_row, start_row + 3):
+			for col in range(start_col, start_col + 3):
+				if puzzle[row][col] != 0:
+					used.add(puzzle[row][col])
 
-    # same column
-    for col in range(9):
-        if col != j and (i, col) in variables:
-            neighbors.add((i, col))
+		domains[var] = [v for v in range(1, 10) if v not in used]
 
-    # same row
-    for row in range(9):
-        if row != i and (row, j) in variables:
-            neighbors.add((row, j))
+	constraints = {}
+	for var in variables:
+		i, j = var
+		neighbors = set()
 
-    # same block 3x3
-    start_row = (i // 3) * 3
-    start_col = (j // 3) * 3
-    for row in range(start_row, start_row + 3):
-        for col in range(start_col, start_col + 3):
-            if (row, col) != var and (row, col) in variables:
-                neighbors.add((row, col))
+		for col in range(9):
+			if col != j and (i, col) in variables:
+				neighbors.add((i, col))
 
-    constraints[var] = neighbors
+		for row in range(9):
+			if row != i and (row, j) in variables:
+				neighbors.add((row, j))
 
-print('*'*7,'Solution','*'*7) 
-csp = CSP(variables, domains, constraints) 
-sol = csp.solve() 
-csp.print_sudoku(puzzle)
-solution = [row[:] for row in puzzle]
-if sol is not None:
-	for (i, j), value in sol.items():
-		solution[i][j] = value
-		
-	csp.print_sudoku(solution)
-	csp.visualize()
-else:
-	print("Solution does not exist")
+		start_row = (i // 3) * 3
+		start_col = (j // 3) * 3
+		for row in range(start_row, start_row + 3):
+			for col in range(start_col, start_col + 3):
+				if (row, col) != var and (row, col) in variables:
+					neighbors.add((row, col))
+
+		constraints[var] = neighbors
+
+	globals()["puzzle"] = puzzle
+
+	print("*" * 7, "Initial puzzle", "*" * 7)
+	CSP.print_sudoku(puzzle)
+
+	csp = CSP(variables, domains, constraints)
+	sol = csp.solve()
+
+	solution = [row[:] for row in puzzle]
+	if sol is not None:
+		for (i, j), value in sol.items():
+			solution[i][j] = value
+
+		print("*" * 7, "Solved puzzle", "*" * 7)
+		csp.print_sudoku(solution)
+		if show_visualization:
+			csp.visualize()
+	else:
+		print("Solution does not exist")
+
+run_test_case("valid_standard", show_visualization=True)
+run_test_case("already_solved")
+run_test_case("invalid_duplicate")
+run_test_case("invalid_size")
