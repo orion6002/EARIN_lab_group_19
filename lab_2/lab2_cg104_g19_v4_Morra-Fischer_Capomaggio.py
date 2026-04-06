@@ -20,7 +20,7 @@ class CSP:
 		self.solution = None
 		self.viz = None
 
-
+	@staticmethod
 	def print_sudoku(puzzle): 
 		for i in range(9): 
 			if i % 3 == 0 and i != 0: 
@@ -149,7 +149,7 @@ for var in variables:
 
 print('*'*7,'Solution','*'*7) 
 csp = CSP(variables, domains, constraints) 
-sol, viz = csp.solve() 
+sol = csp.solve() 
 csp.print_sudoku(puzzle)
 solution = [[0 for i in range(9)] for i in range(9)] 
 if sol is not None:
