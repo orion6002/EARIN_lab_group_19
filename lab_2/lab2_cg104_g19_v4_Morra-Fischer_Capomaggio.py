@@ -39,7 +39,7 @@ class CSP:
 		self.solution = self.backtrack(assignment) 
 		return self.solution 
 	
-	def forward_checking(self, var, value, assignment):
+	def forward_checking(self, var, value, assignment, domains_copy):
 		"""
 		Function that removes the value from the domains of free variables that are in the constraints of the var
 
@@ -47,8 +47,17 @@ class CSP:
 		- var: variable that was assigned the value
 		- value: value that was assigned to the variable
 		- assignment: dict with all the assignments to the variables
+		- domains_copy: get the copy of the domains to avoid unwanted changes
 
 		"""
+		for neighbor in self.constraints[var]:
+			if neighbor not in assignment:
+				if value in domains_copy[neighbor]:
+					domains_copy[neighbor].remove(value)
+				if len(domains_copy[neighbor]) == 0:
+					return False
+		return True
+	  
 	def backtrack(self, assignment): 
 		"""
 		Backtracking algorithm
