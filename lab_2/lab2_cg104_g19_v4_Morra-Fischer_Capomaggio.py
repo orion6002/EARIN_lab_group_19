@@ -15,7 +15,7 @@ class CSP:
 		- viz: everything needed for visualization
 		"""
 		self.variables = variables 
-		self.domains = Domains 
+		self.domains = domains 
 		self.constraints = constraints 
 		self.solution = None
 		self.viz = None
@@ -74,6 +74,33 @@ puzzle = [[5, 3, 0, 0, 7, 0, 0, 0, 0],
 		] 	
 # Based on the puzzle create variables, domains, and constraints for initialization of CSP class
 
+variables = [(i, j) for i in range(9) for j in range(9) if puzzle[i][j] == 0]
+domains = {var: list(range(1, 10)) for var in variables}
+constraints = {}
+
+for var in variables:
+    i, j = var
+    neighbors = set()
+
+    # same column
+    for col in range(9):
+        if col != j and (i, col) in variables:
+            neighbors.add((i, col))
+
+    # same row
+    for row in range(9):
+        if row != i and (row, j) in variables:
+            neighbors.add((row, j))
+
+    # same block 3x3
+    start_row = (i // 3) * 3
+    start_col = (j // 3) * 3
+    for row in range(start_row, start_row + 3):
+        for col in range(start_col, start_col + 3):
+            if (row, col) != var and (row, col) in variables:
+                neighbors.add((row, col))
+
+    constraints[var] = neighbors
 
 print('*'*7,'Solution','*'*7) 
 csp = CSP(variables, domains, constraints) 
