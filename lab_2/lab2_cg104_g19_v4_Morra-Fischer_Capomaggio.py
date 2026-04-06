@@ -120,9 +120,34 @@ puzzle = [[5, 3, 0, 0, 7, 0, 0, 0, 0],
 # Based on the puzzle create variables, domains, and constraints for initialization of CSP class
 
 variables = [(i, j) for i in range(9) for j in range(9) if puzzle[i][j] == 0]
-domains = {var: list(range(1, 10)) for var in variables}
-constraints = {}
 
+domains = {}
+for var in variables:
+	i, j = var
+	used = set()
+
+	# row
+	for col in range(9):
+		if puzzle[i][col] != 0:
+			used.add(puzzle[i][col])
+
+    # column
+	for row in range(9):
+		if puzzle[row][j] != 0:
+			used.add(puzzle[row][j])
+
+    # block 3x3
+	start_row = (i // 3) * 3
+	start_col = (j // 3) * 3
+	for row in range(start_row, start_row + 3):
+		for col in range(start_col, start_col + 3):
+			if puzzle[row][col] != 0:
+				used.add(puzzle[row][col])
+	
+	# Delete every neighbors values from the domain
+	domains[var] = [v for v in range(1, 10) if v not in used]
+
+constraints = {}
 for var in variables:
     i, j = var
     neighbors = set()
