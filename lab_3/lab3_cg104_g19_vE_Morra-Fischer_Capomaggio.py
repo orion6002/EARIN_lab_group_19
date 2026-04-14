@@ -30,9 +30,10 @@ class Chromosome:
         offspring_2 = np.concatenate((other.genes[:c_point], self.genes[c_point:]))
         return Chromosome(self.lenght, offspring_1), Chromosome(self.lenght, offspring_2)
 
+
 # TODO: implement your group's objective function here
 def objective_function(*args):
-    pass
+    return 0.5 * (args[0]**4 - 16*(args[0]**2) + 5*args[0] + args[1]**4 - 16*(args[1]**2) + 5*args[1])
 
 
 class GeneticAlgorithm:
