@@ -51,22 +51,45 @@ class GeneticAlgorithm:
         self.population_size = population_size
         self.crossover_probability = crossover_probability
         self.num_steps = num_steps
+        
+        self.population = [Chromosome(chromosome_length) for i in range(population_size)]
 
     def eval_objective_func(self, chromosome):
-        pass
+        args = []
+        for i in range (self.obj_func_num_args):
+            arg = chromosome.genes[i * self.bits_per_arg : (i+1) * self.bits_per_arg]
+            new_chrom = Chromosome(self.bits_per_arg, arg)
+            args.append(new_chrom.decode(0, self.bits_per_arg - 1, self.aoi[i]))
+        return self.objective_function(*args)
 
     def tournament_selection(self):
-        pass
+        parents = []
+        for i in range(self.population_size):
+            candidates = np.random.choice(self.population, self.tournament_size)
+            most_promissing = min(candidates, key=self.eval_objective_func)
+            parents.append(most_promissing)
+        return parents
+
 
     def reproduce(self, parents):
         pass
 
     def plot_func(self, trace):
-        pass
+        plt.plot(trace)
+        plt.title("Algorithm convergence")
+        plt.xlabel("Gens")
+        plt.ylabel("Value of obj function")
+        plt.show()
 
     def run(self):
-        pass
-
+        points = []
+        for i in range(self.num_steps):
+            most_promissing = min(self.population, key=self.eval_objective_func)
+            points.append(self.eval_objective_func(most_promissing))
+            parents = self.tournament_selection()
+            self.population = self.reproduce(parents)
+        self.plot_func(points)
+        return min(self.population, key=self.eval_objective_func)
 
 # TODO: fill in the parameters for your group and uncomment to run
 # ga = GeneticAlgorithm(
