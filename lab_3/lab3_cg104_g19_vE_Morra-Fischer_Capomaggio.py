@@ -12,23 +12,24 @@ class Chromosome:
             self.genes = np.random.randint(0, 2, length)
         else:
             self.genes = np.array(array)
-        self.lenght = self.lenght
+        self.length = length
 
     def decode(self, lower_bound, upper_bound, aoi):
-        val = int("".joint(map(str, self.genes)), 2)
-        max_val = 2**self.lenght - 1
+        seg = self.genes[lower_bound:upper_bound]
+        val = int("".join(map(str, seg)), 2)
+        max_val = 2**len(seg) - 1
         return min_max_norm(val, 0, max_val, aoi[0], aoi[1])
 
     def mutation(self, probability):
         if np.random.rand() < probability:
-            gene = np.random.randint(0, self.lenght)
+            gene = np.random.randint(0, self.length)
             self.genes[gene] = 1 - self.genes[gene]
 
     def crossover(self, other):
-        c_point = np.random.randint(1, self.lenght)
+        c_point = np.random.randint(1, self.length)
         offspring_1 = np.concatenate((self.genes[:c_point], other.genes[c_point:]))
         offspring_2 = np.concatenate((other.genes[:c_point], self.genes[c_point:]))
-        return Chromosome(self.lenght, offspring_1), Chromosome(self.lenght, offspring_2)
+        return Chromosome(self.length, offspring_1), Chromosome(self.length, offspring_2)
 
 
 # TODO: implement your group's objective function here
@@ -59,7 +60,7 @@ class GeneticAlgorithm:
         for i in range (self.obj_func_num_args):
             arg = chromosome.genes[i * self.bits_per_arg : (i+1) * self.bits_per_arg]
             new_chrom = Chromosome(self.bits_per_arg, arg)
-            args.append(new_chrom.decode(0, self.bits_per_arg - 1, self.aoi[i]))
+            args.append(new_chrom.decode(0, self.bits_per_arg, self.aoi[i]))
         return self.objective_function(*args)
 
     def tournament_selection(self):
@@ -72,35 +73,50 @@ class GeneticAlgorithm:
 
 
     def reproduce(self, parents):
-        pass
+        if np.random.rand() > self.crossover_probability:
+            for parent in parents:
+                parent.mutation(self.mutation_probability)
+            return parents
+        children = []
+        tuple = ()
+        for p1, p2 in zip(parents[:self.population_size//2], parents[self.population_size//2:]):
+            c1, c2 = p1.crossover(p2)
+            c1.mutation(self.mutation_probability)
+            c2.mutation(self.mutation_probability)
+            children.append(c1)
+            children.append(c2)
+        self.population = children
+        return children
+             
 
-    def plot_func(self, trace):
-        plt.plot(trace)
-        plt.title("Algorithm convergence")
-        plt.xlabel("Gens")
-        plt.ylabel("Value of obj function")
-        plt.show()
 
-    def run(self):
-        points = []
-        for i in range(self.num_steps):
-            most_promissing = min(self.population, key=self.eval_objective_func)
-            points.append(self.eval_objective_func(most_promissing))
-            parents = self.tournament_selection()
-            self.population = self.reproduce(parents)
-        self.plot_func(points)
-        return min(self.population, key=self.eval_objective_func)
+    # def plot_func(self, trace):
+    #     plt.plot(trace)
+    #     plt.title("Algorithm convergence")
+    #     plt.xlabel("Gens")
+    #     plt.ylabel("Value of obj function")
+    #     plt.show()
+
+    # def run(self):
+    #     points = []
+    #     for i in range(self.num_steps):
+    #         most_promissing = min(self.population, key=self.eval_objective_func)
+    #         points.append(self.eval_objective_func(most_promissing))
+    #         parents = self.tournament_selection()
+    #         self.population = self.reproduce(parents)
+    #     self.plot_func(points)
+    #     return min(self.population, key=self.eval_objective_func)
 
 # TODO: fill in the parameters for your group and uncomment to run
-# ga = GeneticAlgorithm(
-#     chromosome_length=...,
-#     obj_func_num_args=2,
-#     objective_function=objective_function,
-#     aoi=[...],
-#     population_size=...,
-#     tournament_size=2,
-#     mutation_probability=0.05,
-#     crossover_probability=0.8,
-#     num_steps=...
-# )
-# ga.run()
+ga = GeneticAlgorithm(
+    chromosome_length=...,
+    obj_func_num_args=2,
+    objective_function=objective_function,
+    aoi=[...],
+    population_size=...,
+    tournament_size=2,
+    mutation_probability=0.05,
+    crossover_probability=0.8,
+    num_steps=...
+)
+ga.run()
