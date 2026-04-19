@@ -56,12 +56,7 @@ class GeneticAlgorithm:
         self.population = [Chromosome(chromosome_length) for i in range(population_size)]
 
     def eval_objective_func(self, chromosome):
-        args = []
-        for i in range (self.obj_func_num_args):
-            arg = chromosome.genes[i * self.bits_per_arg : (i+1) * self.bits_per_arg]
-            new_chrom = Chromosome(self.bits_per_arg, arg)
-            args.append(new_chrom.decode(0, self.bits_per_arg, self.aoi[i]))
-        return self.objective_function(*args)
+        return self.objective_function(*self.decode_full_chromosome(chromosome))
 
     def tournament_selection(self):
         parents = []
@@ -70,7 +65,6 @@ class GeneticAlgorithm:
             most_promissing = min(candidates, key=self.eval_objective_func)
             parents.append(most_promissing)
         return parents
-
 
     def reproduce(self, parents):
         if np.random.rand() > self.crossover_probability:
@@ -87,36 +81,79 @@ class GeneticAlgorithm:
             children.append(c2)
         self.population = children
         return children
+    
+    # helper mathod to simplify computing eval_obj_fnc and run 
+    def decode_full_chromosome(self, chromosome):
+        args = []
+        for i in range(self.obj_func_num_args):
+            lo = i * self.bits_per_arg
+            hi = lo + self.bits_per_arg
+            args.append(chromosome.decode(lo, hi, self.aoi[i]))
+        return args
              
 
 
-    # def plot_func(self, trace):
-    #     plt.plot(trace)
-    #     plt.title("Algorithm convergence")
-    #     plt.xlabel("Gens")
-    #     plt.ylabel("Value of obj function")
-    #     plt.show()
+    def plot_func(self, trace_args, trace_vals):
+        # build the contour grid
+        x = np.linspace(self.aoi[0][0], self.aoi[0][1], 300)
+        y = np.linspace(self.aoi[1][0], self.aoi[1][1], 300)
+        X, Y = np.meshgrid(x, y)
+        Z = self.objective_function(X, Y)
+        plt.contourf(X, Y, Z, levels=50, cmap="viridis")
+        plt.colorbar()
+        n = len(trace_args)
+        colors = plt.cm.Reds(np.linspace(0.3, 1.0, n))
+        x1s = [a[0] for a in trace_args]
+        x2s = [a[1] for a in trace_args]
+        plt.scatter(x1s, x2s, c=colors, s=20, zorder=3)
+        plt.title("Objective function contour with best individual trace")
+        plt.xlabel("x1")
+        plt.ylabel("x2")
+        plt.show()
 
-    # def run(self):
-    #     points = []
-    #     for i in range(self.num_steps):
-    #         most_promissing = min(self.population, key=self.eval_objective_func)
-    #         points.append(self.eval_objective_func(most_promissing))
-    #         parents = self.tournament_selection()
-    #         self.population = self.reproduce(parents)
-    #     self.plot_func(points)
-    #     return min(self.population, key=self.eval_objective_func)
+    def run(self):
+        plot_args = []
+        plot_vals = []
+        for i in range(self.num_steps):
+            best = min(self.population, key=self.eval_objective_func)
+            plot_args.append(self.decode_full_chromosome(best))
+            plot_vals.append(self.eval_objective_func(best))
+        parents = self.tournament_selection()
+        self.population = self.reproduce(parents)
+        self.plot_func(plot_args, plot_vals)
+        return min(self.population, key=self.eval_objective_func)
 
 # TODO: fill in the parameters for your group and uncomment to run
+# I keep this in order to remember the initial given parameters
+# ga = GeneticAlgorithm(
+#     chromosome_length=...,
+#     obj_func_num_args=2,
+#     objective_function=objective_function,
+#     aoi=[...],
+#     population_size=...,
+#     tournament_size=2,
+#     mutation_probability=0.05,
+#     crossover_probability=0.8,
+#     num_steps=...
+# )
+# ga.run()
+
 ga = GeneticAlgorithm(
-    chromosome_length=...,
+    chromosome_length=32,
     obj_func_num_args=2,
     objective_function=objective_function,
-    aoi=[...],
-    population_size=...,
-    tournament_size=2,
+    aoi=[[-5, 5], [-5, 5]],
+    population_size=100,
+    tournament_size=3,
     mutation_probability=0.05,
     crossover_probability=0.8,
-    num_steps=...
+    num_steps=100
 )
-ga.run()
+best = ga.run()
+print(ga.decode_full_chromosome(best))
+print(ga.eval_objective_func(best))
+
+# I found on the initernet that:
+# For the Styblinski-Tang function, the known global minimum is your ground truth:
+# Global minimum value: ≈ −78.3323
+# Located at: (x1, x2) ≈ (−2.9035, −2.9035)
