@@ -32,8 +32,9 @@ class Chromosome:
         return Chromosome(self.length, offspring_1), Chromosome(self.length, offspring_2)
 
 
+# TODO: implement your group's objective function here
 def objective_function(*args):
-    return 0.5 * sum(x**4 - 16*x**2 + 5*x for x in args)
+    return 0.5 * (args[0]**4 - 16*(args[0]**2) + 5*args[0] + args[1]**4 - 16*(args[1]**2) + 5*args[1])
 
 
 class GeneticAlgorithm:
@@ -62,7 +63,7 @@ class GeneticAlgorithm:
         for i in range(self.population_size):
             candidates = np.random.choice(self.population, self.tournament_size)
             most_promissing = min(candidates, key=self.eval_objective_func)
-            parents.append(Chromosome(most_promissing.length, most_promissing.genes.copy()))
+            parents.append(most_promissing)
         return parents
 
     def reproduce(self, parents):
@@ -71,6 +72,7 @@ class GeneticAlgorithm:
                 parent.mutation(self.mutation_probability)
             return parents
         children = []
+        tuple = ()
         for p1, p2 in zip(parents[:self.population_size//2], parents[self.population_size//2:]):
             c1, c2 = p1.crossover(p2)
             c1.mutation(self.mutation_probability)
@@ -111,11 +113,9 @@ class GeneticAlgorithm:
 
     def run(self):
         plot_args = []
-        plot_vals = []
-        for i in range(self.num_steps):
+        for _ in range(self.num_steps):
             best = min(self.population, key=self.eval_objective_func)
             plot_args.append(self.decode_full_chromosome(best))
-            plot_vals.append(self.eval_objective_func(best))
             parents = self.tournament_selection()
             self.population = self.reproduce(parents)
         return min(self.population, key=self.eval_objective_func), plot_args
@@ -146,7 +146,8 @@ def run_experiment(config_name, params):
     last_trace = None
     
     print(f"Experiment: {config_name}")
-    for i in range(10):
+    best_val = float('inf')
+    for _ in range(10):
         ga = GeneticAlgorithm(
             chromosome_length=32,
             obj_func_num_args=2,
@@ -156,14 +157,15 @@ def run_experiment(config_name, params):
             **params
         )
         best_chrom, trace_args = ga.run()
-        results.append(ga.eval_objective_func(best_chrom))
-        last_trace = trace_args
+        val = ga.eval_objective_func(best_chrom)
+        results.append(val)
+        if val < best_val:
+            best_val = val
+            last_trace = trace_args
         
     mean_val = np.mean(results)
-    std_val = np.std(results)
     
     print(f"--> Local minimum found: {mean_val:.4f}\n")
-    print(f"--> Standard deviation: {std_val:.4f}\n")
     ga.plot_func(last_trace)
 
 test_configs = {
