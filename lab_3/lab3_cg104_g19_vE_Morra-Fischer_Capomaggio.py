@@ -32,9 +32,8 @@ class Chromosome:
         return Chromosome(self.length, offspring_1), Chromosome(self.length, offspring_2)
 
 
-# TODO: implement your group's objective function here
 def objective_function(*args):
-    return 0.5 * (args[0]**4 - 16*(args[0]**2) + 5*args[0] + args[1]**4 - 16*(args[1]**2) + 5*args[1])
+    return 0.5 * sum(x**4 - 16*x**2 + 5*x for x in args)
 
 
 class GeneticAlgorithm:
@@ -63,7 +62,7 @@ class GeneticAlgorithm:
         for i in range(self.population_size):
             candidates = np.random.choice(self.population, self.tournament_size)
             most_promissing = min(candidates, key=self.eval_objective_func)
-            parents.append(most_promissing)
+            parents.append(Chromosome(most_promissing.length, most_promissing.genes.copy()))
         return parents
 
     def reproduce(self, parents):
@@ -72,7 +71,6 @@ class GeneticAlgorithm:
                 parent.mutation(self.mutation_probability)
             return parents
         children = []
-        tuple = ()
         for p1, p2 in zip(parents[:self.population_size//2], parents[self.population_size//2:]):
             c1, c2 = p1.crossover(p2)
             c1.mutation(self.mutation_probability)
@@ -162,8 +160,10 @@ def run_experiment(config_name, params):
         last_trace = trace_args
         
     mean_val = np.mean(results)
+    std_val = np.std(results)
     
     print(f"--> Local minimum found: {mean_val:.4f}\n")
+    print(f"--> Standard deviation: {std_val:.4f}\n")
     ga.plot_func(last_trace)
 
 test_configs = {
