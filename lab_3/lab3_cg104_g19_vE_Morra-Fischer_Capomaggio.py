@@ -93,7 +93,7 @@ class GeneticAlgorithm:
              
 
 
-    def plot_func(self, trace_args, trace_vals):
+    def plot_func(self, trace_args):
         # build the contour grid
         x = np.linspace(self.aoi[0][0], self.aoi[0][1], 300)
         y = np.linspace(self.aoi[1][0], self.aoi[1][1], 300)
@@ -118,10 +118,9 @@ class GeneticAlgorithm:
             best = min(self.population, key=self.eval_objective_func)
             plot_args.append(self.decode_full_chromosome(best))
             plot_vals.append(self.eval_objective_func(best))
-        parents = self.tournament_selection()
-        self.population = self.reproduce(parents)
-        self.plot_func(plot_args, plot_vals)
-        return min(self.population, key=self.eval_objective_func)
+            parents = self.tournament_selection()
+            self.population = self.reproduce(parents)
+        return min(self.population, key=self.eval_objective_func), plot_args
 
 # TODO: fill in the parameters for your group and uncomment to run
 # I keep this in order to remember the initial given parameters
@@ -138,22 +137,42 @@ class GeneticAlgorithm:
 # )
 # ga.run()
 
-ga = GeneticAlgorithm(
-    chromosome_length=32,
-    obj_func_num_args=2,
-    objective_function=objective_function,
-    aoi=[[-5, 5], [-5, 5]],
-    population_size=100,
-    tournament_size=3,
-    mutation_probability=0.05,
-    crossover_probability=0.8,
-    num_steps=100
-)
-best = ga.run()
-print(ga.decode_full_chromosome(best))
-print(ga.eval_objective_func(best))
 
-# I found on the initernet that:
+# I found on the internet that:
 # For the Styblinski-Tang function, the known global minimum is your ground truth:
 # Global minimum value: ≈ −78.3323
 # Located at: (x1, x2) ≈ (−2.9035, −2.9035)
+
+def run_experiment(config_name, params):
+    results = []
+    last_trace = None
+    
+    print(f"Experiment: {config_name}")
+    for i in range(10):
+        ga = GeneticAlgorithm(
+            chromosome_length=32,
+            obj_func_num_args=2,
+            objective_function=objective_function,
+            aoi=[[-5, 5], [-5, 5]],
+            num_steps=100,
+            **params
+        )
+        best_chrom, trace_args = ga.run()
+        results.append(ga.eval_objective_func(best_chrom))
+        last_trace = trace_args
+        
+    mean_val = np.mean(results)
+    
+    print(f"--> Local minimum found: {mean_val:.4f}\n")
+    ga.plot_func(last_trace)
+
+test_configs = {
+    "High Mutation probability": {"mutation_probability": 0.8, "tournament_size": 3, "population_size": 50, "crossover_probability": 0.8},
+    "Large Tournament": {"mutation_probability": 0.02, "tournament_size": 10, "population_size": 50, "crossover_probability": 0.8},
+    "Small Population": {"mutation_probability": 0.05, "tournament_size": 2, "population_size": 20, "crossover_probability": 0.7},
+    "Best Theorical Baseline": {"mutation_probability": 0.05, "tournament_size": 3, "population_size": 100, "crossover_probability": 0.9}
+}
+
+print("Theorical minimum: −78.3323")
+for name, params in test_configs.items():
+    run_experiment(name, params)
