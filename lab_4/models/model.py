@@ -9,7 +9,7 @@ from sklearn.model_selection import cross_val_score, GridSearchCV, train_test_sp
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn import tree
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
 from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
@@ -108,7 +108,7 @@ X_test_scaled[continuous_cols] = scaler.transform(X_test[continuous_cols])
 models = {
     "Logistic Regression": LogisticRegression(max_iter=2000),
     "Decision Tree": tree.DecisionTreeClassifier(random_state=1),
-    "KNN": KNeighborsClassifier(),
+    "SVM": SVC(random_state=1),
 }
 
 print("\n=== Baseline CV Accuracy (4-fold) ===")
@@ -147,18 +147,21 @@ clf_lr = GridSearchCV(
 clf_lr.fit(X_train_scaled, y_train)
 report_best(clf_lr, "Logistic Regression")
 
-# --- KNN ---
-knn_param_grid = {
-    "n_neighbors": [3, 5, 7, 9],
-    "weights": ["uniform", "distance"],
-    "algorithm": ["auto", "ball_tree", "kd_tree"],
-    "p": [1, 2],
+# --- SVM ---
+svm_param_grid = {
+    "C": [0.1, 1, 10],
+    "kernel": ["linear", "rbf"],
+    "gamma": ["scale", "auto"],
 }
-clf_knn = GridSearchCV(
-    KNeighborsClassifier(), param_grid=knn_param_grid, cv=4, n_jobs=-1, verbose=0
+clf_svm = GridSearchCV(
+    SVC(probability=True, random_state=1),
+    param_grid=svm_param_grid,
+    cv=4,
+    n_jobs=-1,
+    verbose=0,
 )
-clf_knn.fit(X_train_scaled, y_train)
-report_best(clf_knn, "KNN")
+clf_svm.fit(X_train_scaled, y_train)
+report_best(clf_svm, "SVM")
 
 # --- Decision Tree ---
 dt_param_grid = {
@@ -183,7 +186,7 @@ report_best(clf_dt, "Decision Tree")
 tuned_models = {
     "Logistic Regression": clf_lr.best_estimator_,
     "Decision Tree": clf_dt.best_estimator_,
-    "KNN": clf_knn.best_estimator_,
+    "SVM": clf_svm.best_estimator_,
 }
 
 print("\n=== Test-set accuracy (held-out 20%) ===")
@@ -205,7 +208,7 @@ voting_clf = VotingClassifier(
     estimators=[
         ("lr", clf_lr.best_estimator_),
         ("dt", clf_dt.best_estimator_),
-        ("knn", clf_knn.best_estimator_),
+        ("svm", clf_svm.best_estimator_),
     ],
     voting="soft",
 )

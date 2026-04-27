@@ -5,7 +5,10 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from pathlib import Path
 
+FIGURES_DIR = Path(__file__).resolve().parent.parent / "figures"
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Load data from csv file
 training = pd.read_csv("./datasets/train.csv")
@@ -29,7 +32,7 @@ for col in df_num.columns:
     plt.hist(df_num[col], bins=20)
     plt.title(col)
     plt.tight_layout()
-    plt.savefig(f"dist_{col}.png")
+    plt.savefig(FIGURES_DIR / f"dist_{col}.png")
     plt.close()
 
 # Correlation heatmap
@@ -37,7 +40,7 @@ print("\nCorrelation matrix:")
 print(df_num.corr())
 sns.heatmap(df_num.corr(), annot=True)
 plt.tight_layout()
-plt.savefig("correlation_heatmap.png")
+plt.savefig(FIGURES_DIR / "correlation_heatmap.png")
 plt.close()
 
 # Survival rates by boarding class
