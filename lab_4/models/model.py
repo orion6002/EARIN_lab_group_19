@@ -5,13 +5,24 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 from sklearn.model_selection import cross_val_score, GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn import tree
 from sklearn.svm import SVC
 from sklearn.ensemble import VotingClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    ConfusionMatrixDisplay,
+    precision_score,
+    recall_score,
+    f1_score,
+)
+
+FIGURES_DIR = Path(__file__).resolve().parent.parent / "figures"
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Load data from csv file
@@ -46,53 +57,72 @@ def engineer_features(df):
 training = engineer_features(training)
 
 # ==============================================================================
-# 4. DATA PREPROCESSING
+# 4. TRAIN / TEST SPLIT  (80 / 20)
 # ==============================================================================
 
-# Impute missing values with median from full training set
-age_median = training.Age.median()
-fare_median = training.Fare.median()
-
-training.Age = training.Age.fillna(age_median)
-training.Fare = training.Fare.fillna(fare_median)
-training.dropna(subset=["Embarked"], inplace=True)
-
-# Log-normalise fare to reduce skewness
-training["norm_fare"] = np.log(training.Fare + 1)
-
-# Convert Pclass to string so it becomes a categorical dummy
-training.Pclass = training.Pclass.astype(str)
-
-# One-hot encode categorical features
 feature_cols = [
     "Pclass",
     "Sex",
     "Age",
     "SibSp",
     "Parch",
-    "norm_fare",
+    "Fare",
     "Embarked",
     "cabin_adv",
     "cabin_multiple",
     "numeric_ticket",
     "name_title",
 ]
-data_dummies = pd.get_dummies(training[feature_cols])
 
-X = data_dummies
+X_raw = training[feature_cols]
 y = training["Survived"]
 
-# ==============================================================================
-# 5. TRAIN / TEST SPLIT  (80 / 20)
-# ==============================================================================
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=1, stratify=y
+X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+    X_raw, y, test_size=0.2, random_state=1, stratify=y
 )
 
-print(f"\nTrain size: {X_train.shape[0]} | Test size: {X_test.shape[0]}")
+print(f"\nTrain size: {X_train_raw.shape[0]} | Test size: {X_test_raw.shape[0]}")
 
-# Scale continuous features
+# ==============================================================================
+# 5. DATA PREPROCESSING
+# ==============================================================================
+
+# The preprocessing statistics are computed only on the training set to avoid
+# data leakage from the test set.
+X_train_prepared = X_train_raw.copy()
+X_test_prepared = X_test_raw.copy()
+
+age_median = X_train_prepared["Age"].median()
+fare_median = X_train_prepared["Fare"].median()
+embarked_mode = X_train_prepared["Embarked"].mode()[0]
+
+X_train_prepared["Age"] = X_train_prepared["Age"].fillna(age_median)
+X_test_prepared["Age"] = X_test_prepared["Age"].fillna(age_median)
+
+X_train_prepared["Fare"] = X_train_prepared["Fare"].fillna(fare_median)
+X_test_prepared["Fare"] = X_test_prepared["Fare"].fillna(fare_median)
+
+X_train_prepared["Embarked"] = X_train_prepared["Embarked"].fillna(embarked_mode)
+X_test_prepared["Embarked"] = X_test_prepared["Embarked"].fillna(embarked_mode)
+
+# Log-normalise fare to reduce skewness.
+X_train_prepared["norm_fare"] = np.log(X_train_prepared["Fare"] + 1)
+X_test_prepared["norm_fare"] = np.log(X_test_prepared["Fare"] + 1)
+
+X_train_prepared = X_train_prepared.drop(columns=["Fare"])
+X_test_prepared = X_test_prepared.drop(columns=["Fare"])
+
+# Convert Pclass to string so it becomes a categorical dummy.
+X_train_prepared["Pclass"] = X_train_prepared["Pclass"].astype(str)
+X_test_prepared["Pclass"] = X_test_prepared["Pclass"].astype(str)
+
+# One-hot encode categorical features after the split, then align test columns
+# with the training columns.
+X_train = pd.get_dummies(X_train_prepared)
+X_test = pd.get_dummies(X_test_prepared)
+X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
+
+# Scale continuous features using statistics learned only from the training set.
 scaler = StandardScaler()
 continuous_cols = ["Age", "SibSp", "Parch", "norm_fare"]
 
@@ -134,13 +164,14 @@ def report_best(clf, name):
 
 # --- Logistic Regression ---
 lr_param_grid = {
-    "l1_ratio": [0.0, 1.0],
     "C": np.logspace(-4, 4, 20),
+    "penalty": ["l1", "l2"],
 }
 clf_lr = GridSearchCV(
     LogisticRegression(max_iter=2000, solver="saga"),
     param_grid=lr_param_grid,
     cv=4,
+    scoring="f1",
     n_jobs=-1,
     verbose=0,
 )
@@ -157,6 +188,7 @@ clf_svm = GridSearchCV(
     SVC(probability=True, random_state=1),
     param_grid=svm_param_grid,
     cv=4,
+    scoring="f1",
     n_jobs=-1,
     verbose=0,
 )
@@ -173,6 +205,7 @@ clf_dt = GridSearchCV(
     tree.DecisionTreeClassifier(random_state=1),
     param_grid=dt_param_grid,
     cv=4,
+    scoring="f1",
     n_jobs=-1,
     verbose=0,
 )
@@ -189,13 +222,21 @@ tuned_models = {
     "SVM": clf_svm.best_estimator_,
 }
 
-print("\n=== Test-set accuracy (held-out 20%) ===")
+print("\n=== Test-set performance (held-out 20%) ===")
 test_results = {}
 for name, model in tuned_models.items():
     y_pred = model.predict(X_test_scaled)
-    acc = accuracy_score(y_test, y_pred)
-    test_results[name] = acc
-    print(f"{name:25s}  accuracy={acc:.4f}")
+    test_results[name] = {
+        "Accuracy": accuracy_score(y_test, y_pred),
+        "Precision": precision_score(y_test, y_pred),
+        "Recall": recall_score(y_test, y_pred),
+        "F1-score": f1_score(y_test, y_pred),
+    }
+    print(f"\n{name}")
+    print(f"Accuracy : {test_results[name]['Accuracy']:.4f}")
+    print(f"Precision: {test_results[name]['Precision']:.4f}")
+    print(f"Recall   : {test_results[name]['Recall']:.4f}")
+    print(f"F1-score : {test_results[name]['F1-score']:.4f}")
     print(
         classification_report(y_test, y_pred, target_names=["Not Survived", "Survived"])
     )
@@ -214,18 +255,79 @@ voting_clf = VotingClassifier(
 )
 voting_clf.fit(X_train_scaled, y_train)
 y_pred_vc = voting_clf.predict(X_test_scaled)
-vc_acc = accuracy_score(y_test, y_pred_vc)
-print(f"\nVoting Classifier (soft) test accuracy: {vc_acc:.4f}")
+voting_results = {
+    "Accuracy": accuracy_score(y_test, y_pred_vc),
+    "Precision": precision_score(y_test, y_pred_vc),
+    "Recall": recall_score(y_test, y_pred_vc),
+    "F1-score": f1_score(y_test, y_pred_vc),
+}
+print("\nVoting Classifier (soft)")
+print(f"Accuracy : {voting_results['Accuracy']:.4f}")
+print(f"Precision: {voting_results['Precision']:.4f}")
+print(f"Recall   : {voting_results['Recall']:.4f}")
+print(f"F1-score : {voting_results['F1-score']:.4f}")
+print(
+    classification_report(
+        y_test, y_pred_vc, target_names=["Not Survived", "Survived"]
+    )
+)
 
 # ==============================================================================
 # 10. SUMMARY TABLE
 # ==============================================================================
 
-summary = pd.DataFrame(
+summary_rows = []
+
+for model_name, metrics in test_results.items():
+    summary_rows.append(
+        {
+            "Model": model_name,
+            "Test Accuracy": metrics["Accuracy"],
+            "Test Precision": metrics["Precision"],
+            "Test Recall": metrics["Recall"],
+            "Test F1-score": metrics["F1-score"],
+        }
+    )
+
+summary_rows.append(
     {
-        "Model": list(tuned_models.keys()) + ["Voting Ensemble"],
-        "Test Accuracy": [test_results[m] for m in tuned_models] + [vc_acc],
+        "Model": "Voting Ensemble",
+        "Test Accuracy": voting_results["Accuracy"],
+        "Test Precision": voting_results["Precision"],
+        "Test Recall": voting_results["Recall"],
+        "Test F1-score": voting_results["F1-score"],
     }
 )
+
+summary = pd.DataFrame(summary_rows)
+summary.to_csv(FIGURES_DIR / "final_model_results.csv", index=False)
 print("\n=== Final Summary ===")
-print(summary.sort_values("Test Accuracy", ascending=False).to_string(index=False))
+print(summary.sort_values("Test F1-score", ascending=False).to_string(index=False))
+print(f"\nFinal results table saved to {FIGURES_DIR / 'final_model_results.csv'}")
+
+# ==============================================================================
+# 11. CONFUSION MATRIX FOR BEST MODEL
+# ==============================================================================
+
+best_model_name = summary.sort_values("Test F1-score", ascending=False).iloc[0]["Model"]
+
+if best_model_name == "Voting Ensemble":
+    best_model = voting_clf
+else:
+    best_model = tuned_models[best_model_name]
+
+ConfusionMatrixDisplay.from_estimator(
+    best_model,
+    X_test_scaled,
+    y_test,
+    display_labels=["Not Survived", "Survived"],
+)
+plt.title(f"Confusion Matrix - {best_model_name}")
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / "confusion_matrix_best_model.png")
+plt.close()
+
+print(
+    f"\nConfusion matrix for the best model ({best_model_name}) saved to "
+    f"{FIGURES_DIR / 'confusion_matrix_best_model.png'}"
+)
