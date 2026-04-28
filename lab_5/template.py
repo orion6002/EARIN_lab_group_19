@@ -35,13 +35,22 @@ class FullyConnected(Layer):
         super().__init__()
         self.input_size = input_size
         self.output_size = output_size
-        # TODO: initialise weights and bias
+        self.weight = np.random.randn(input_size, output_size) * 0.01
+        self.bias = np.zeros((1, output_size))
+        self.input = None
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        pass
+        self.input = x
+        return x @ self.weight + self.bias
 
     def backward(self, output_error_derivative) -> np.ndarray:
-        pass
+        dw = self.input.T @ output_error_derivative
+        db = np.sum(output_error_derivative, axis=0, keepdims=True)
+        input_gradient = output_error_derivative @ self.weight.T
+
+        self.W -= self.learning_rate * dw
+        self.b -= self.learning_rate * db
+        return input_gradient
 
 
 # TODO (Group A / B): implement Tanh, Sigmoid, ReLU, LeakyReLU
@@ -57,10 +66,10 @@ class Loss:
         self.loss_function_derivative = loss_function_derivative
 
     def loss(self, y_pred: np.ndarray, y_true: np.ndarray) -> float:
-        pass
-
+        return self.loss_function(y_pred, y_true)
+    
     def loss_derivative(self, y_pred: np.ndarray, y_true: np.ndarray) -> np.ndarray:
-        pass
+        return self.loss_function_derivative(y_pred, y_true)
 
 
 class Network:
@@ -69,11 +78,15 @@ class Network:
         self.learning_rate = learning_rate
 
     def compile(self, loss: Loss) -> None:
-        pass
+        self.loss = loss
+        for layer in self.layers:
+            layer.learning_rate = self.learning_rate
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
         """Forward propagation of x through all layers"""
-        pass
+        for layer in self.layers:
+            x = layer.forward(x)
+        return x
 
     def fit(self,
             x_train: np.ndarray,
