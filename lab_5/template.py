@@ -48,8 +48,8 @@ class FullyConnected(Layer):
         db = np.sum(output_error_derivative, axis=0, keepdims=True)
         input_gradient = output_error_derivative @ self.weight.T
 
-        self.W -= self.learning_rate * dw
-        self.b -= self.learning_rate * db
+        self.weight -= self.learning_rate * dw
+        self.bias -= self.learning_rate * db
         return input_gradient
 
 
@@ -71,6 +71,32 @@ class Loss:
     def loss_derivative(self, y_pred: np.ndarray, y_true: np.ndarray) -> np.ndarray:
         return self.loss_function_derivative(y_pred, y_true)
 
+def mse(y_pred, y_true):
+    return (2 / y_pred.size) * (y_pred - y_true)
+
+def mse_derivative(y_pred, y_true):
+    return (2 / y_pred.shape[0]) * (y_pred - y_true)
+
+def mae(y_pred, y_true):
+    return np.mean(np.abs(y_pred - y_true))
+
+def mae_derivative(y_pred, y_true):
+    return np.sign(y_pred - y_true) / y_pred.shape[0]
+
+def softmax(x):
+    e = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return e / np.sum(e, axis=1, keepdims=True)
+
+def cross_entropy(y_pred, y_true):
+    probs = softmax(y_pred)
+    return -np.mean(np.sum(y_true * np.log(probs + 1e-9), axis=1))
+
+def cross_entropy_derivative(y_pred, y_true):
+    return (softmax(y_pred) - y_true) / y_pred.shape[0]
+
+mse_loss = Loss(mse, mse_derivative)
+ce_loss  = Loss(cross_entropy, cross_entropy_derivative)
+mae_loss = Loss(mae, mae_derivative)
 
 class Network:
     def __init__(self, layers: List[Layer], learning_rate: float) -> None:
@@ -93,8 +119,38 @@ class Network:
             y_train: np.ndarray,
             epochs: int,
             learning_rate: float,
-            verbose: int = 0) -> List[float]:
-        pass
+            verbose: int = 0,
+            loss = None) -> List[float]:
+        if loss is not None:
+            self.compile(loss)
+        self.learning_rate = learning_rate
+        self.compile(self.loss)
+    
+        loss_history = []
+        for epoch in range(epochs):
+            y_pred = self(x_train)
+            loss_val = self.loss.loss(y_pred, y_train)
+            loss_history.append(loss_val)
+       
+            grad = self.loss.loss_derivative(y_pred, y_train)
+            for layer in reversed(self.layers):
+                grad = layer.backward(grad)
+        
+            if verbose > 0 and epoch % verbose == 0:
+                print(f"Epoch {epoch}: loss={loss_val:.4f}")
+    
+        return loss_history
+
+class ReLU(Layer):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        self.input = x
+        return np.maximum(0, x)
+
+    def backward(self, output_error_derivative):
+        return output_error_derivative * (self.input > 0)
 
 
 # ---------------------------------------------------------------------------
