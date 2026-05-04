@@ -71,31 +71,57 @@ class Loss:
     def loss_derivative(self, y_pred: np.ndarray, y_true: np.ndarray) -> np.ndarray:
         return self.loss_function_derivative(y_pred, y_true)
 
-def mse(y_pred, y_true):
+def mse(y_pred: np.ndarray, y_true: np.ndarray) -> float:
+    """Mean Squared Error loss."""
+    return np.mean((y_pred - y_true) ** 2)
+
+
+def mse_derivative(y_pred: np.ndarray, y_true: np.ndarray) -> np.ndarray:
+    """Derivative of MSE with respect to y_pred."""
     return (2 / y_pred.size) * (y_pred - y_true)
 
-def mse_derivative(y_pred, y_true):
-    return (2 / y_pred.shape[0]) * (y_pred - y_true)
 
-def mae(y_pred, y_true):
+def mae(y_pred: np.ndarray, y_true: np.ndarray) -> float:
+    """Mean Absolute Error loss."""
     return np.mean(np.abs(y_pred - y_true))
 
-def mae_derivative(y_pred, y_true):
-    return np.sign(y_pred - y_true) / y_pred.shape[0]
 
-def softmax(x):
-    e = np.exp(x - np.max(x, axis=1, keepdims=True))
-    return e / np.sum(e, axis=1, keepdims=True)
+def mae_derivative(y_pred: np.ndarray, y_true: np.ndarray) -> np.ndarray:
+    """Derivative of MAE with respect to y_pred."""
+    return np.sign(y_pred - y_true) / y_pred.size
 
-def cross_entropy(y_pred, y_true):
+
+def softmax(x: np.ndarray) -> np.ndarray:
+    """Numerically stable softmax applied row-wise."""
+    shifted_x = x - np.max(x, axis=1, keepdims=True)
+    exp_values = np.exp(shifted_x)
+    return exp_values / np.sum(exp_values, axis=1, keepdims=True)
+
+
+def cross_entropy(y_pred: np.ndarray, y_true: np.ndarray) -> float:
+    """
+    Cross-entropy loss for one-hot encoded labels.
+
+    y_pred contains raw logits. Softmax is applied inside the loss.
+    """
     probs = softmax(y_pred)
-    return -np.mean(np.sum(y_true * np.log(probs + 1e-9), axis=1))
+    eps = 1e-12
+    return -np.mean(np.sum(y_true * np.log(probs + eps), axis=1))
 
-def cross_entropy_derivative(y_pred, y_true):
+
+def cross_entropy_derivative(y_pred: np.ndarray,
+                             y_true: np.ndarray) -> np.ndarray:
+    """
+    Derivative of softmax + cross-entropy with respect to logits.
+
+    This combined derivative is more stable than differentiating softmax
+    and cross-entropy separately.
+    """
     return (softmax(y_pred) - y_true) / y_pred.shape[0]
 
+
 mse_loss = Loss(mse, mse_derivative)
-ce_loss  = Loss(cross_entropy, cross_entropy_derivative)
+ce_loss = Loss(cross_entropy, cross_entropy_derivative)
 mae_loss = Loss(mae, mae_derivative)
 
 class Network:
@@ -120,9 +146,10 @@ class Network:
             epochs: int,
             learning_rate: float,
             verbose: int = 0,
-            loss = None) -> List[float]:
+            loss: Loss = None) -> List[float]:
         if loss is not None:
-            self.compile(loss)
+            self.loss = loss
+
         self.learning_rate = learning_rate
         self.compile(self.loss)
     
@@ -137,7 +164,7 @@ class Network:
                 grad = layer.backward(grad)
         
             if verbose > 0 and epoch % verbose == 0:
-                print(f"Epoch {epoch}: loss={loss_val:.4f}")
+                print(f"Epoch {epoch}: loss={float(loss_val):.4f}")
     
         return loss_history
 
