@@ -1,6 +1,9 @@
 from abc import abstractmethod, ABC
 from typing import List
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import fetch_openml
+from sklearn.model_selection import train_test_split
 
 
 class Layer(ABC):
@@ -35,7 +38,7 @@ class FullyConnected(Layer):
         super().__init__()
         self.input_size = input_size
         self.output_size = output_size
-        self.weight = np.random.randn(input_size, output_size) * 0.01
+        self.weight = np.random.randn(input_size, output_size) * np.sqrt(2 / input_size)
         self.bias = np.zeros((1, output_size))
         self.input = None
 
@@ -180,17 +183,141 @@ class ReLU(Layer):
         return output_error_derivative * (self.input > 0)
 
 
-# ---------------------------------------------------------------------------
-# Data loading skeleton (shared by all groups)
-# ---------------------------------------------------------------------------
-# from sklearn.datasets import fetch_openml
-# from sklearn.model_selection import train_test_split
-#
-# mnist = fetch_openml('mnist_784', version=1, as_frame=False)   # Group A / C / D / E
-# # OR
-# fmnist = fetch_openml('Fashion-MNIST', version=1, as_frame=False)  # Group B
-#
-# X = dataset.data / 255.0
-# y = dataset.target.astype(int)
-# y_onehot = np.eye(10)[y]
-# X_train, X_test, y_train, y_test = train_test_split(X, y_onehot, test_size=0.2, random_state=0)
+
+
+def load_mnist_subset(train_size: int = 10000,
+                      test_size: int = 2000,
+                      seed: int = 0):
+    """Load MNIST, normalize inputs and one-hot encode labels."""
+    dataset = fetch_openml("mnist_784", version=1, as_frame=False)
+
+    x = dataset.data.astype(np.float32) / 255.0
+    y = dataset.target.astype(int)
+    y_onehot = np.eye(10)[y]
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        x,
+        y_onehot,
+        train_size=train_size,
+        test_size=test_size,
+        random_state=seed,
+        stratify=y,
+    )
+
+    return x_train, x_test, y_train, y_test
+
+
+def create_network(architecture: List[int], learning_rate: float) -> Network:
+    """
+    Create a ReLU MLP.
+
+    The final layer is linear because Cross-Entropy applies softmax internally.
+    """
+    layers = []
+
+    for i in range(len(architecture) - 2):
+        layers.append(FullyConnected(architecture[i], architecture[i + 1]))
+        layers.append(ReLU())
+
+    layers.append(FullyConnected(architecture[-2], architecture[-1]))
+
+    return Network(layers, learning_rate)
+
+
+def accuracy(network: Network,
+             x_data: np.ndarray,
+             y_data: np.ndarray) -> float:
+    """Compute classification accuracy."""
+    y_pred = network(x_data)
+    pred_labels = np.argmax(y_pred, axis=1)
+    true_labels = np.argmax(y_data, axis=1)
+    return float(np.mean(pred_labels == true_labels))
+
+
+def run_experiments():
+    """Run Group D experiments: MSE vs MAE vs Cross-Entropy."""
+    seeds = [0, 1, 2]
+    epochs = 30
+    learning_rate = 0.1
+
+    architectures = {
+        "784-128-10": [784, 128, 10],
+        "784-256-128-10": [784, 256, 128, 10],
+    }
+
+    losses = {
+        "MSE": mse_loss,
+        "MAE": mae_loss,
+        "Cross-Entropy": ce_loss,
+    }
+
+    x_train, x_test, y_train, y_test = load_mnist_subset()
+    results = {}
+    histories = {}
+
+    for arch_name, architecture in architectures.items():
+        results[arch_name] = {}
+        histories[arch_name] = {}
+
+        for loss_name, loss_obj in losses.items():
+            accuracies = []
+            seed_histories = []
+
+            for seed in seeds:
+                np.random.seed(seed)
+                network = create_network(architecture, learning_rate)
+                network.compile(loss_obj)
+
+                history = network.fit(
+                    x_train,
+                    y_train,
+                    epochs=epochs,
+                    learning_rate=learning_rate,
+                    verbose=0,
+                )
+
+                test_acc = accuracy(network, x_test, y_test)
+                accuracies.append(test_acc)
+                seed_histories.append(history)
+
+                print(
+                    f"Architecture={arch_name}, "
+                    f"Loss={loss_name}, "
+                    f"Seed={seed}, "
+                    f"Test accuracy={test_acc:.4f}"
+                )
+
+            results[arch_name][loss_name] = {
+                "mean": float(np.mean(accuracies)),
+                "std": float(np.std(accuracies)),
+            }
+            histories[arch_name][loss_name] = np.mean(seed_histories, axis=0)
+
+    print("\nMean ± std test accuracy")
+    for arch_name, loss_results in results.items():
+        print(f"\nArchitecture: {arch_name}")
+        for loss_name, stats in loss_results.items():
+            print(
+                f"{loss_name}: "
+                f"{stats['mean']:.4f} ± {stats['std']:.4f}"
+            )
+
+    for arch_name, loss_histories in histories.items():
+        plt.figure(figsize=(8, 5))
+        for loss_name, mean_history in loss_histories.items():
+            plt.plot(mean_history, label=loss_name)
+
+        plt.title(f"Training loss curves - Architecture {arch_name}")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f"loss_curves_{arch_name}.png", dpi=300)
+        plt.show()
+
+    return results, histories
+
+
+if __name__ == "__main__":
+    run_experiments()
