@@ -104,7 +104,7 @@ def experiments():
     alphas = [0.01, 0.1, 0.5, 1]
     for a in alphas:
         print(f"Alpha = {a}...")
-        _, rewards, _ = get_q_table(iterations, alpha=a, gamma=0.95, min_eps=5)
+        _, rewards, _ = get_q_table(iterations, a, 0.95, 5)
         all_rewards[f"Alpha {a}"] = rewards
     plot_learning_curves(all_rewards)
 
@@ -112,7 +112,7 @@ def experiments():
     gammas = [0.3, 0.6, 0.9, 0.99]
     for g in gammas:
         print(f"Gamma = {g}...")
-        _, rewards, _ = get_q_table(iterations, alpha=0.1, gamma=g, min_eps=5)
+        _, rewards, _ = get_q_table(iterations, 0.1, g, 5)
         all_rewards_gamma[f"Gamma {g}"] = rewards
     plot_learning_curves(all_rewards_gamma)
     
@@ -120,7 +120,7 @@ def experiments():
     eps = [0, 20, 50, 100]
     for e in eps:
         print(f"Eps = {e}...")
-        _, rewards, _ = get_q_table(iterations, alpha=0.1, gamma=0.95, min_eps=e)
+        _, rewards, _ = get_q_table(iterations, 0.1, 0.95, e)
         all_rewards_eps[f"Eps {e}"] = rewards
     plot_learning_curves(all_rewards_eps)
 
@@ -128,7 +128,7 @@ def experiments():
     iter = [100, 1000, 10000, 50000]
     for i in iter:
         print(f"Iter = {i}...")
-        _, rewards, _ = get_q_table(i, alpha=0.1, gamma=0.95, min_eps=5)
+        _, rewards, _ = get_q_table(i, 0.1, 0.95, 5)
         all_rewards_iter[f"Iter {i}"] = rewards
     plot_learning_curves(all_rewards_iter)
 
