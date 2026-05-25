@@ -17,8 +17,8 @@ sentiment/
     │   └── preprocessor.py  # base text cleaning
     ├── models/
     │   ├── logistic.py       # TF-IDF + Logistic Regression
-    │   ├── lstm.py           # Bidirectional LSTM (PyTorch)
-    │   └── roberta.py        # RoBERTa fine-tuning (HuggingFace)
+    │   ├── lstm.py           # LSTM (PyTorch)
+    │   └── roberta.py        # RoBERTa fine-tuning
     └── evaluation/
         └── metrics.py        # accuracy, F1, confusion matrix
 ```

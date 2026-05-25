@@ -1,38 +1,20 @@
-"""
-data/preprocessor.py
-Base text preprocessing shared by all three models.
-Model-specific preprocessing lives in each model's own module.
-"""
-
 import re
 
 
 def clean_text(text: str) -> str:
     """
-    Apply base cleaning to a single review string.
-
-    Steps:
-      1. Remove HTML tags.
-      2. Lowercase.
-      3. Collapse multiple whitespace into one.
-
-    Punctuation that carries sentiment (!, ?) is intentionally kept.
-
-    Args:
-        text: Raw review string (already stripped of __label__ prefix).
-
-    Returns:
-        Cleaned string.
+    Takes a string removed from the label and returns the cleaned string.
+    We use the regex re lib to make is smoother.
+    The punctuation which carries sentiment is intentionally kept.
     """
     # Remove HTML tags
     text = re.sub(r"<[^>]+>", " ", text)
-    # Lowercase
     text = text.lower()
-    # Collapse whitespace
+    # Collapse multiple blanks into one only
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 def clean_texts(texts: list[str]) -> list[str]:
-    """Apply clean_text to a list of strings."""
+    """Cleans every text given in the list"""
     return [clean_text(t) for t in texts]

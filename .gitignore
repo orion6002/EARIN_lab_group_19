@@ -9,6 +9,7 @@ Makefile
 *.out
 neurips*
 *.bz2
+*.ft*
 
 # User-specific files
 *.rsuser
