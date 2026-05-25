@@ -9,7 +9,7 @@ Binary sentiment classification on Amazon product reviews
 sentiment/
 ├── train.py                  # main entry point
 ├── requirements.txt
-├── data/                     # put train.ft.txt and test.ft.txt here
+├── data/                     # train.ft.txt and test.ft.txt here
 ├── out/                      # models and plots are saved here
 └── src/
     ├── data/
@@ -31,10 +31,8 @@ pip install -r requirements.txt
 
 ## Data
 
-Download the dataset from Kaggle:  
+the dataset is taken from Kaggle:  
 https://www.kaggle.com/datasets/bittlingmayer/amazonreviews
-
-Extract the `.bz2` files and place them in `data/`:
 
 ```
 data/
