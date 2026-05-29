@@ -3,7 +3,20 @@ evaluation/metrics.py
 Evaluation utilities used by all three models.
 """
 
+import os
+from pathlib import Path
+from typing import Optional
+
 import numpy as np
+
+os.environ.setdefault(
+    "MPLCONFIGDIR",
+    str(Path(__file__).resolve().parents[2] / "out" / ".matplotlib"),
+)
+
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import (
@@ -55,7 +68,7 @@ def plot_confusion_matrix(
     y_true: list[int],
     y_pred: list[int],
     model_name: str = "Model",
-    save_path: str | None = None,
+    save_path: Optional[str] = None,
 ) -> None:
     """
     Plot and optionally save a confusion matrix heatmap.

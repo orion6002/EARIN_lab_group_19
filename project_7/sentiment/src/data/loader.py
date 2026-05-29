@@ -19,11 +19,20 @@ def parse_fasttext_file(filepath: str, max_samples=None) -> tuple[list[str], lis
     The programm returns a tuple of lists of the strings (comments) and integers (labels (0/1))
     """
     texts, labels = [], []
+    path = Path(filepath)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Dataset file not found: {filepath}\n"
+            "Download and extract the Kaggle Amazon Reviews dataset, then place "
+            "train.ft.txt and test.ft.txt in sentiment/data/ or pass the correct "
+            "paths with --train and --test."
+        )
+
     pattern = re.compile(
         r"^__label__([12])\s+(.+)$"
     )  # defines a patern __label__x with x = 1 or 2
 
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         for i, line in enumerate(f):
             if (
                 max_samples is not None and i >= max_samples
