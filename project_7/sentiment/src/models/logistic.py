@@ -15,6 +15,7 @@ def train(
     train_labels: list[int],
     max_features: int = 100_000,
     C: float = 1.0,
+    random_state: int = 42,
 ) -> Pipeline:
     """
     Train a Logistic Regression classifier on TF-IDF features.
@@ -24,6 +25,7 @@ def train(
         train_labels: Binary labels, where 0 is negative and 1 is positive.
         max_features: Maximum TF-IDF vocabulary size.
         C: Inverse regularization strength for Logistic Regression.
+        random_state: Seed used by the Logistic Regression solver.
 
     Returns:
         A fitted scikit-learn Pipeline.
@@ -45,7 +47,7 @@ def train(
                     C=C,
                     max_iter=1_000,
                     solver="liblinear",
-                    random_state=42,
+                    random_state=random_state,
                 ),
             ),
         ]

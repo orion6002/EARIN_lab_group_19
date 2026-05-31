@@ -1,0 +1,368 @@
+\documentclass{article}
+
+
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2024
+
+
+% ready for submission
+% \usepackage[final]{neurips_2024}
+
+
+% to compile a preprint version, e.g., for submission to arXiv, add add the
+% [preprint] option:
+%     \usepackage[preprint]{neurips_2024}
+
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+%     \usepackage[final]{neurips_2024}
+
+
+% to avoid loading the natbib package, add option nonatbib:
+%    \usepackage[nonatbib]{neurips_2024}
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage{graphicx}       % figures
+\graphicspath{{./}{preliminary_report/}}
+
+
+\title{Preliminary Report For Project 7\\Sentiment Analysis}
+
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to break the
+% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
+% authors names on the first line, and the last on the second line, try using
+% \AND instead of \And before the third author name.
+
+
+\author{
+  Group 19 \\
+  Nolan Capomaggio and Mathis Morra-Fischer \\
+%   \texttt{\url{https://github.com/orion6002/EARIN\_lab\_group\_19}}
+}
+
+
+\begin{document}
+
+
+\maketitle
+
+\begin{abstract}
+  Sentiment analysis is a key task in Natural Language Processing (NLP), 
+  aiming to automatically determine the emotional polarity of a given text. 
+  In this work, the goal is to address binary sentiment classification of Amazon 
+  product reviews. We distinguish positive (4–5 stars) from negative (1–2 stars) 
+  review. We use the Amazon Reviews dataset (Kaggle, Adam Bittlingmayer), 
+  which includes approximately 4 million labeled reviews. We propose to compare 
+  three approaches of increasing complexity: Logistic Regression with TF-IDF 
+  features, a LSTM neural network, and a fine-tuned RoBERTa 
+  model. Models are evaluated using accuracy and macro F1-score.
+\end{abstract}
+
+
+\section{Introduction}
+For large companies as Amazon, being able to classify good and bad reviews is 
+mandatory in order to be able to satisfy the custommer. Knowing this, our 
+goal is to developp a thrustworthy solution to tackle this issue. Our solution 
+is known as sentiment analysis.
+
+In this project, we frame sentiment analysis as a \textbf{binary text classification}
+problem.
+Given the text of an Amazon product review, the goal is to predict a label
+$y \in \{0, 1\}$, where $0$ denotes a negative review (1–2 stars) and $1$ denotes
+a positive review (4–5 stars).
+Reviews rated 3 stars (neutral) are excluded from the dataset by construction,
+so no neutral class is considered.
+
+We use the Amazon Reviews dataset published by Bittlingmayer on Kaggle,
+which provides 3.6 million training examples and 400,000 test examples in fastText
+format.
+We propose to compare three methods of increasing complexity: a Logistic Regression
+classifier with TF-IDF features, a Long Short-Term Memory (LSTM) recurrent neural
+network, and a fine-tuned RoBERTa transformer model.
+
+
+\section{Dataset}
+We use the Amazon Reviews dataset from Kaggle (\url{https://www.kaggle.com/datasets
+/bittlingmayer/amazonreviews}). 
+Each line is formatted as a fastText label followed by the review text:
+\texttt{\_\_label\_\_1} corresponds to a negative review (1--2 stars) and
+\texttt{\_\_label\_\_2} corresponds to a positive review (4--5 stars).
+Three-star reviews are excluded by construction, so the task is strictly binary.
+It contains approximately 4 million labeled reviews.
+
+\subsection{Data Balance \& Splits}
+The two classes are distributed equally: exactly 50\% negative and 50\% positive
+in both the training and test splits.
+The dataset is therefore \textbf{perfectly balanced}, and no oversampling or
+undersampling is required.\\
+The dataset contains approximately 4 millions entries. It is already splitted into 
+a training part and a test part with a ratio of 90/10 (which is enough because the 
+testing part is already consituated of 400 000 entries). This is considered a 
+standard for this kind of dataset.
+
+\subsection{Preprocessing}
+For all methods implemented we have to do a based preprocess. The \texttt{\_\_label\_\_X}
+prefix is stripped.
+The text itself requires cleaning because it is written by humans which are not reliable 
+and use special characters. We will remove HTML tags, special characters and unnecessary 
+punctuation. We will also convert text to lowercase to prevent taking uppercased words 
+as different words.\\
+For each models that we are going to use, we have to do a different preprocessing in 
+order to make them more efficient.\\
+
+- For Logistic Regression we will use TF-IDF (Term Frequency-Inverse Document Frequency). 
+This turns text into a numerical matrix. It highlights words that are important to s
+pecific reviews.\\
+- For LSTM, the text will be converted into sequences of integers. We will use padding 
+to ensure all inputs have the same length. We will also use pre-trained word 
+embeddings to represent semantic meaning.\\
+- The RoBERTa is the one with the most advanced preprocessing. We have to use a 
+byte-level Byte-Pair Encoding tokenizer. This handles rare words by breaking them into 
+smaller sub-units. Then We will add the <s> (start of string) and </s> (separator) 
+tokens. The model uses the representation of the first token for classification. And 
+finaly we have to create masks to tell the model which parts of the input are real text 
+and which are only padding.
+
+
+\subsection{Evaluation Metrics}
+We want to collect the following metrics during tests:
+\begin{itemize}
+  \item \textbf{Accuracy}: the proportion of correctly classified examples.
+    This is a valid primary metric here because the dataset is perfectly balanced.
+  \item \textbf{Macro F1-score}: the unweighted mean of per-class F1 scores.
+    It provides a more robust basis for comparing methods, particularly as a
+    cross-benchmark reference.
+  \item \textbf{Precision and Recall} per class: to identify asymmetric error
+    patterns (e.g., a model biased toward predicting positive).
+  \item \textbf{Confusion matrix}: for qualitative analysis of error types.
+\end{itemize} We will compare our results to the 
+top scores on the website. Based on the Kaggle leaderboard and existing literature for this 
+dataset, the state-of-the-art accuracy is approximately 92–94\%. Our goal is to approach 
+this upper bound using the RoBERTa model.
+
+\section{Solution Description}
+
+\subsection{Overview}
+
+For our project we will be using three different methods:
+\textit{Logistic Regression} represent documents as sparse
+bag-of-words or TF-IDF vectors and train linear or kernel-based classifiers
+\cite{pang2002thumbs}.
+\textit{LSTM} model is a sequential structure of text and
+capture order-dependent patterns; Long Short-Term Memory (LSTM) networks are the 
+most used in this type of processing.
+\textit{RoBERTa} such as BERT and its successors achieve state-of-the-art results 
+combining large-scale unsupervised pre-training with task-specific fine-tuning.
+
+The choice of method focuses on quantifing the performance gain at each level of
+complexity and to evaluate whether the additional computational cost of
+more advanced models is justified on this particular dataset.
+
+\subsection{Logistic Regression with TF-IDF}
+
+Logistic Regression trained on TF-IDF features serves as our baseline.
+The method is fast, fully interpretable, and has been shown to yield competitive
+accuracy on large-scale review datasets.
+
+\paragraph{Feature extraction}
+TF-IDF (Term Frequency – Inverse Document Frequency) assigns a weight to each
+word in a document that reflects how informative that word is relative to the
+entire corpus.
+We can construct a TF-IDF matrix using unigrams and bigrams, retaining the top
+100,000 features ranked by term frequency.
+We fit a Logistic Regression classifier with $\ell_2$ regularization using the
+\texttt{scikit-learn} implementation.
+
+\paragraph{Motivation}
+This method acts as a strong reference point: any more complex model must
+surpass it to justify its additional cost in training time and computational
+resources, it is a fast method (not time consuming) but not so efficient.
+
+\subsection{Long Short-Term Memory Network}
+
+LSTM networks are a class of recurrent neural
+networks designed to capture long-range dependencies in sequential data.
+Each LSTM cell maintains a memory state that is updated at every time step
+through learned gating mechanisms (input, forget, and output gates), which
+mitigate the vanishing gradient problem of vanilla RNNs.
+
+\paragraph{Training.}
+The model is trained with the Adam optimizer and
+binary cross-entropy loss for up to 5 epochs with early stopping based on
+validation F1-score for allowing training in a resonable time.
+
+\paragraph{Motivation.}
+Compared to the TF-IDF baseline, LSTM captures word order and local context.
+It represents an intermediate complexity level and does not require a GPU
+for inference, making it a practical middle choice.
+
+\subsection{RoBERTa}
+
+RoBERTa (Robustly Optimized BERT Pretraining Approach) 
+is a transformer encoder pre-trained on a large
+English text corpus.
+It improves over the original BERT model by removing
+the Next Sentence Prediction objective, and training with larger batches and 
+more data. These modifications consistently improve downstream classification 
+performance.
+
+\paragraph{Architecture.}
+We fine-tune the \texttt{roberta-base} checkpoint 
+from the Hugging Face Transformers library.
+A linear classification head is added on top of the representation of the
+\texttt{<s>} (start-of-sequence) token, which aggregates contextual information
+from the entire input.
+
+\paragraph{Fine-tuning.}
+Fine-tuning is performed for up to 3 epochs with a learning rate of
+$2 \times 10^{-5}$, linear warmup over the first 10\% of steps, and weight
+decay of 0.01.
+The batch size is set to 32.
+
+\paragraph{Motivation.}
+RoBERTa represents the state-of-the-art family of methods for text
+classification.
+Its inclusion allows us to measure the benefit of large-scale pre-trained
+contextual representations over task-specific architectures trained from
+scratch.
+
+\section{Midterm Solution}
+
+\subsection{Implemented Progress}
+At this stage of the project, we have implemented and evaluated one complete
+method: \textbf{Logistic Regression with TF-IDF features}. This model is used as
+the baseline because it is fast to train, easy to reproduce, and provides a
+strong reference before implementing more expensive neural models.
+
+The current implementation includes the following parts:
+\begin{itemize}
+  \item a loader for the fastText dataset format, converting
+  \texttt{\_\_label\_\_1} to class 0 and \texttt{\_\_label\_\_2} to class 1;
+  \item a stratified train/validation split that keeps the 50/50 class balance;
+  \item basic preprocessing, including HTML tag removal, lowercasing, and
+  whitespace normalization;
+  \item a \texttt{scikit-learn} pipeline with TF-IDF vectorization followed by
+  Logistic Regression;
+  \item evaluation code for accuracy, macro F1-score, precision, recall,
+  classification reports, and confusion matrices;
+  \item saving the trained model as a \texttt{.pkl} file for later reuse.
+\end{itemize}
+
+The Logistic Regression model uses unigram and bigram TF-IDF features, a maximum
+vocabulary size of 100,000 features, sublinear term-frequency scaling, and
+$\ell_2$ regularization with $C=1.0$.
+
+\subsection{Reproducibility}
+The experiment is reproducible because the data split uses a fixed random seed.
+The default seed is \textbf{42}, and it can be changed through the command line
+argument \texttt{--seed}. The full baseline experiment was run with:
+
+\begin{verbatim}
+python3 sentiment/train.py \
+  --model logistic \
+  --train sentiment/data/train.ft.txt \
+  --test sentiment/data/test.ft.txt \
+  --output_dir sentiment/out/logistic_full
+\end{verbatim}
+
+The full Kaggle training file contains 3,600,000 reviews. We split it into
+2,880,000 training examples and 720,000 validation examples. The official test
+file contains 400,000 reviews.
+
+\subsection{Intermediate Results}
+Table~\ref{tab:midterm-logistic-results} presents the current results on the
+full dataset. The validation and test results are very close, which suggests
+that the model generalizes consistently and that the split is representative.
+
+\begin{table}[h]
+  \centering
+  \caption{Midterm results for Logistic Regression with TF-IDF.}
+  \label{tab:midterm-logistic-results}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Split & Examples & Accuracy & Macro F1 & Precision & Recall \\
+    \midrule
+    Validation & 720,000 & 0.9413 & 0.9413 & 0.9413 & 0.9413 \\
+    Test & 400,000 & 0.9407 & 0.9407 & 0.9407 & 0.9407 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.55\linewidth]{confusion_logistic.png}
+  \caption{Confusion matrix for the Logistic Regression baseline on the full
+  test set.}
+  \label{fig:midterm-logistic-confusion}
+\end{figure}
+
+The model obtains 94.07\% accuracy and 94.07\% macro F1-score on the full test
+set. Precision and recall are also balanced between the negative and positive
+classes, both being approximately 0.94. This shows that the model does not have
+a strong bias toward one class, which is expected because the dataset is
+perfectly balanced.
+
+\subsection{Challenges, Findings, and Corrections}
+The first challenge was practical dataset handling. The Kaggle files are large
+and must be extracted before training.
+
+The main finding so far is that the baseline is stronger than expected. In the
+initial plan, Logistic Regression was presented mainly as a fast but less
+powerful baseline. However, it already reaches around 94\% test accuracy on the
+full dataset. This means that LSTM and RoBERTa must be evaluated not only by
+accuracy, but also by training time, computational cost, and practical benefit
+over this strong baseline.
+
+\subsection{Plan for the Final Report}
+For the final report, we plan to complete the comparison between the three
+selected methods: Logistic Regression, LSTM, and RoBERTa. The final experiments
+should include:
+\begin{itemize}
+  \item accuracy, macro F1-score, precision, recall, and confusion matrices for
+  all implemented models;
+  \item comparison of training time and hardware requirements;
+  \item analysis of whether the LSTM and RoBERTa models improve enough over
+  Logistic Regression to justify their additional complexity;
+  \item qualitative error analysis on selected misclassified reviews;
+  \item final discussion of the best trade-off between performance,
+  interpretability, and computational cost.
+\end{itemize}
+
+
+\section{Conclusion}
+We have described the dataset, evaluation protocol, and three methods for
+binary sentiment classification of Amazon product reviews.
+The Amazon Reviews dataset is large, perfectly balanced, and requires only
+minimal preprocessing; no class rebalancing technique is needed.
+Our three methods – Logistic Regression with TF-IDF, LSTM, and RoBERTa – 
+span the full range from a lightweight and interpretable baseline to a
+state-of-the-art transformer model, enabling a controlled comparison of
+performance versus computational cost.
+In the next stage of the project, we will implement all three pipelines,
+compare their accuracy and macro F1-score on the validation set, and
+investigate the impact of key design choices such as vocabulary size,
+sequence length, and fine-tuning strategy.
+
+\section*{References}
+
+{\small
+[1] NeurIPS\ (2024) Call for Papers\\ \url{https://neurips.cc/Conferences/2024/CallForPapers}
+
+[2] Adam Bittlingmayer\ (2020) Amazon Reviews for Sentiment Analysis\\ \url{https://www.kaggle.com/datasets/bittlingmayer/amazonreviews}
+}
+
+\end{document}

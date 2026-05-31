@@ -33,7 +33,10 @@ RoBERTa extra flags:
 
 import argparse
 import os
+import random
 import sys
+
+import numpy as np
 
 # Make src importable from project root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -41,6 +44,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from data.loader import load_dataset
 from data.preprocessor import clean_texts
 from evaluation.metrics import evaluate, plot_confusion_matrix
+
+
+def set_seed(seed: int) -> None:
+    """Set random seeds used by the training pipeline."""
+    random.seed(seed)
+    np.random.seed(seed)
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +88,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    set_seed(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
 
     # ------------------------------------------------------------------ #
@@ -128,6 +138,7 @@ def _run_logistic(args, train_texts, train_labels, val_texts, val_labels,
         train_texts, train_labels,
         max_features=args.max_features,
         C=args.C,
+        random_state=args.seed,
     )
 
     print("\n--- Validation ---")
