@@ -425,5 +425,5 @@ FodyWeavers.xsd
 *.msm
 *.msp
 lab_4/figures/final_model_results.csv
-*.png
+# *.png
 .vscode/settings.json
