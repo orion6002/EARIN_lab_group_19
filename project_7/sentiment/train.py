@@ -56,8 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a sentiment classifier.")
 
     # Required
-    parser.add_argument("--model", required=True, choices=["logistic", "lstm", "roberta"],
-                        help="Which model to train.")
+    parser.add_argument("--model", required=True, choices=["logistic", "lstm", "roberta"], help="Which model to train.")
     parser.add_argument("--train", required=True, help="Path to train.ft.txt")
     parser.add_argument("--test", required=True, help="Path to test.ft.txt")
 
@@ -78,6 +77,9 @@ def parse_args() -> argparse.Namespace:
     # LSTM specific
     parser.add_argument("--embed_dim", type=int, default=100)
     parser.add_argument("--hidden_dim", type=int, default=128)
+    parser.add_argument("--num_layers", type=int, default=1)
+    parser.add_argument("--freeze_embedding", action="store_true")
+    parser.add_argument("--freeze_classifier", action="store_true")
 
     # Logistic Regression specific
     parser.add_argument("--max_features", type=int, default=100_000)
@@ -157,8 +159,7 @@ def _run_logistic(args, train_texts, train_labels, val_texts, val_labels,
     logistic.save(model, os.path.join(args.output_dir, "logistic_pipeline.pkl"))
 
 
-def _run_lstm(args, train_texts, train_labels, val_texts, val_labels,
-              test_texts, test_labels) -> None:
+def _run_lstm(args, train_texts, train_labels, val_texts, val_labels, test_texts, test_labels) -> None:
     from models.lstm import Vocabulary, train as lstm_train, predict as lstm_predict, save as lstm_save
 
     vocab = Vocabulary()
@@ -171,6 +172,9 @@ def _run_lstm(args, train_texts, train_labels, val_texts, val_labels,
         max_len=args.max_len or 256,
         embed_dim=args.embed_dim,
         hidden_dim=args.hidden_dim,
+        num_layers=args.num_layers,
+        freeze_embedding=args.freeze_embedding,
+        freeze_classifier=args.freeze_classifier,
         batch_size=args.batch_size or 64,
         num_epochs=args.epochs or 5,
         lr=args.lr or 1e-3,

@@ -1,18 +1,21 @@
 """
 models/lstm.py
-Bidirectional LSTM classifier for sentiment analysis.
+LSTM / Bi-LSTM classifier for sentiment analysis.
 
-Pipeline:
-  1. Tokenize text -> integer sequences
-  2. Pad / truncate to fixed length
-  3. Embed with pre-trained GloVe (or random init)
-  4. BiLSTM -> global max-pool -> dropout -> linear head
+Configurable options
+--------------------
+  bidirectional   : True  -> BiLSTM  |  False -> classic LSTM
+  num_layers      : stack N LSTM layers
+  freeze_embedding: lock / unlock the embedding layer (first layer)
+  freeze_classifier: lock / unlock the linear head (last layer)
+  train_size      : use only N examples from the training set
+  lr              : Adam learning rate
 """
 
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from tqdm import tqdm
 
 
@@ -38,7 +41,7 @@ class Vocabulary:
         Build vocabulary from training texts.
 
         Args:
-            texts: List of tokenized strings (whitespace-separated).
+            texts: List of whitespace-tokenised strings.
             max_vocab: Maximum vocabulary size (most frequent tokens kept).
         """
         from collections import Counter
@@ -47,7 +50,7 @@ class Vocabulary:
         for text in texts:
             counter.update(text.split())
 
-        for token, _ in counter.most_common(max_vocab - 2):   # -2 for PAD / UNK
+        for token, _ in counter.most_common(max_vocab - 2):   # -2 for PAD/UNK
             idx = len(self.token2idx)
             self.token2idx[token] = idx
             self.idx2token[idx] = token
@@ -86,7 +89,6 @@ class ReviewDataset(Dataset):
 
     def __getitem__(self, idx: int) -> dict:
         seq = self.encoded[idx]
-        # Truncate or pad to max_len
         if len(seq) > self.max_len:
             seq = seq[: self.max_len]
         else:
@@ -94,20 +96,33 @@ class ReviewDataset(Dataset):
 
         return {
             "input_ids": torch.tensor(seq, dtype=torch.long),
-            "label": torch.tensor(self.labels[idx], dtype=torch.long),
+            "label":     torch.tensor(self.labels[idx], dtype=torch.long),
         }
 
 
 # ---------------------------------------------------------------------------
-# 3.  BiLSTM Architecture
+# 3.  LSTM / BiLSTM architecture
 # ---------------------------------------------------------------------------
 
-class BiLSTMClassifier(nn.Module):
+class LSTMClassifier(nn.Module):
     """
-    Bidirectional LSTM for binary sentiment classification.
+    Configurable LSTM / BiLSTM for binary sentiment classification.
 
     Architecture:
-        Embedding -> BiLSTM -> Global Max Pool -> Dropout -> Linear
+        Embedding  ->  LSTM (N layers, optional bidirectional)
+                   ->  Global Max Pool  ->  Dropout  ->  Linear (2)
+
+    Args:
+        vocab_size      : Number of tokens in the vocabulary.
+        embed_dim       : Embedding dimension (default 100).
+        hidden_dim      : Hidden units per LSTM direction (default 128).
+        num_layers      : Number of stacked LSTM layers (default 1).
+        bidirectional   : If True, use BiLSTM; if False, use classic LSTM.
+        dropout         : Dropout probability (default 0.3).
+        pad_idx         : Index of the padding token (default 0).
+        pretrained_embeddings : Optional numpy array (vocab_size, embed_dim).
+        freeze_embedding  : If True, embedding weights are NOT updated.
+        freeze_classifier : If True, the final linear layer is NOT updated.
     """
 
     def __init__(
@@ -115,43 +130,66 @@ class BiLSTMClassifier(nn.Module):
         vocab_size: int,
         embed_dim: int = 100,
         hidden_dim: int = 128,
-        num_layers: int = 1,
+        num_layers: int = 1, # might be changed to max 5 for test purposes
+        bidirectional: bool = True,
         dropout: float = 0.3,
         pad_idx: int = 0,
         pretrained_embeddings: np.ndarray | None = None,
+        freeze_embedding: bool = False,
+        freeze_classifier: bool = False,
     ) -> None:
         super().__init__()
 
+        self.bidirectional = bidirectional
+
+        # ---- Embedding layer (first layer) ----
         self.embedding = nn.Embedding(
             vocab_size, embed_dim, padding_idx=pad_idx
         )
         if pretrained_embeddings is not None:
             self.embedding.weight.data.copy_(
-                torch.from_numpy(pretrained_embeddings)
+                torch.from_numpy(pretrained_embeddings).float()
             )
+        self.embedding.weight.requires_grad = not freeze_embedding
 
+        # ---- LSTM (N layers, classic or bidirectional) ----
         self.lstm = nn.LSTM(
-            embed_dim,
-            hidden_dim,
+            input_size=embed_dim,
+            hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
-            bidirectional=True,
+            bidirectional=bidirectional,
+            # inter-layer dropout only when num_layers > 1
             dropout=dropout if num_layers > 1 else 0.0,
         )
 
         self.dropout = nn.Dropout(dropout)
-        # *2 because bidirectional
-        self.classifier = nn.Linear(hidden_dim * 2, 2)
+
+        # Output size: *2 if bidirectional, *1 if classic
+        lstm_output_dim = hidden_dim * (2 if bidirectional else 1)
+
+        # ---- Linear head (last layer) ----
+        self.classifier = nn.Linear(lstm_output_dim, 2)
+        for param in self.classifier.parameters():
+            param.requires_grad = not freeze_classifier
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
-        # input_ids: (batch, seq_len)
-        embedded = self.dropout(self.embedding(input_ids))   # (batch, seq_len, embed)
-        output, _ = self.lstm(embedded)                       # (batch, seq_len, 2*hidden)
+        # input_ids : (batch, seq_len)
+        embedded = self.dropout(self.embedding(input_ids))  # (batch, seq_len, embed)
+        output, _ = self.lstm(embedded)                      # (batch, seq_len, lstm_out)
         # Global max pooling over time dimension
-        pooled, _ = output.max(dim=1)                         # (batch, 2*hidden)
+        pooled, _ = output.max(dim=1)                        # (batch, lstm_out)
         pooled = self.dropout(pooled)
-        logits = self.classifier(pooled)                      # (batch, 2)
+        logits = self.classifier(pooled)                     # (batch, 2)
         return logits
+
+    def print_frozen_status(self) -> None:
+        """Print which layers are frozen / trainable."""
+        print("\n--- Layer status ---")
+        for name, param in self.named_parameters():
+            status = "TRAINABLE" if param.requires_grad else "FROZEN"
+            print(f"  {name:<45} {status}")
+        print()
 
 
 # ---------------------------------------------------------------------------
@@ -164,62 +202,93 @@ def train(
     val_texts: list[str],
     val_labels: list[int],
     vocab: Vocabulary,
+    # ---- architecture ----
+    bidirectional: bool = True,
+    num_layers: int = 1,
     max_len: int = 256,
     embed_dim: int = 100,
     hidden_dim: int = 128,
     dropout: float = 0.3,
+    pretrained_embeddings: np.ndarray | None = None,
+    # ---- layer freezing ----
+    freeze_embedding: bool = False,
+    freeze_classifier: bool = False,
+    # ---- training ----
     batch_size: int = 64,
     num_epochs: int = 5,
     lr: float = 1e-3,
+    train_size: int | None = None,   # limit training examples (None = all)
     device: str = "cpu",
-    pretrained_embeddings: np.ndarray | None = None,
-) -> BiLSTMClassifier:
+) -> LSTMClassifier:
     """
-    Train the BiLSTM classifier with early stopping on validation F1.
+    Train the LSTM / BiLSTM classifier.
 
-    Args:
-        train_texts / train_labels: Training data.
-        val_texts / val_labels: Validation data.
-        vocab: Fitted Vocabulary object.
-        max_len: Maximum sequence length (tokens).
-        embed_dim: Embedding dimension.
-        hidden_dim: LSTM hidden units per direction.
-        dropout: Dropout rate.
-        batch_size: Mini-batch size.
-        num_epochs: Maximum training epochs.
-        lr: Adam learning rate.
-        device: "cpu" or "cuda".
-        pretrained_embeddings: Optional (vocab_size, embed_dim) numpy array.
+    Key parameters
+    --------------
+    bidirectional   : True -> BiLSTM, False -> classic LSTM
+    num_layers      : number of stacked LSTM layers
+    freeze_embedding: freeze the embedding layer (first layer)
+    freeze_classifier: freeze the linear head (last layer)
+    train_size      : use only this many training examples (reproducible subset)
+    lr              : Adam learning rate
 
-    Returns:
-        Best BiLSTMClassifier (by validation accuracy).
+    Returns
+    -------
+    Best LSTMClassifier checkpoint (by validation accuracy).
     """
-    train_ds = ReviewDataset(train_texts, train_labels, vocab, max_len)
+    # ---- Build datasets ----
+    full_train_ds = ReviewDataset(train_texts, train_labels, vocab, max_len)
+
+    if train_size is not None and train_size < len(full_train_ds):
+        indices = list(range(train_size))   # first N (already shuffled by loader.py)
+        train_ds = Subset(full_train_ds, indices)
+        print(f"Training on subset: {train_size:,} / {len(full_train_ds):,} examples.")
+    else:
+        train_ds = full_train_ds
+        print(f"Training on full dataset: {len(train_ds):,} examples.")
+
     val_ds = ReviewDataset(val_texts, val_labels, vocab, max_len)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
 
-    model = BiLSTMClassifier(
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=2)
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=2)
+
+    # ---- Build model ----
+    mode = "BiLSTM" if bidirectional else "LSTM"
+    print(
+        f"\nBuilding {mode} | layers={num_layers} | hidden={hidden_dim} "
+        f"| embed={embed_dim} | lr={lr} | freeze_emb={freeze_embedding} "
+        f"| freeze_clf={freeze_classifier}"
+    )
+
+    model = LSTMClassifier(
         vocab_size=len(vocab),
         embed_dim=embed_dim,
         hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        bidirectional=bidirectional,
         dropout=dropout,
         pretrained_embeddings=pretrained_embeddings,
+        freeze_embedding=freeze_embedding,
+        freeze_classifier=freeze_classifier,
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model.print_frozen_status()
+
+    # Only pass parameters that require gradients to the optimizer
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.Adam(trainable_params, lr=lr)
     criterion = nn.CrossEntropyLoss()
 
     best_val_acc = 0.0
     best_state = None
 
     for epoch in range(num_epochs):
-        # --- Training ---
+        # ---- Training pass ----
         model.train()
         total_loss = 0.0
         for batch in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs} [train]"):
             input_ids = batch["input_ids"].to(device)
-            labels = batch["label"].to(device)
+            labels    = batch["label"].to(device)
 
             optimizer.zero_grad()
             logits = model(input_ids)
@@ -230,17 +299,17 @@ def train(
 
         avg_loss = total_loss / len(train_loader)
 
-        # --- Validation ---
+        # ---- Validation pass ----
         model.eval()
         correct = total = 0
         with torch.no_grad():
             for batch in val_loader:
                 input_ids = batch["input_ids"].to(device)
-                labels = batch["label"].to(device)
-                logits = model(input_ids)
-                preds = logits.argmax(dim=1)
-                correct += (preds == labels).sum().item()
-                total += labels.size(0)
+                labels    = batch["label"].to(device)
+                logits    = model(input_ids)
+                preds     = logits.argmax(dim=1)
+                correct  += (preds == labels).sum().item()
+                total    += labels.size(0)
 
         val_acc = correct / total
         print(f"  Epoch {epoch + 1}: loss={avg_loss:.4f}  val_acc={val_acc:.4f}")
@@ -250,7 +319,7 @@ def train(
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
 
     model.load_state_dict(best_state)
-    print(f"Best validation accuracy: {best_val_acc:.4f}")
+    print(f"\nBest validation accuracy: {best_val_acc:.4f}")
     return model
 
 
@@ -259,7 +328,7 @@ def train(
 # ---------------------------------------------------------------------------
 
 def predict(
-    model: BiLSTMClassifier,
+    model: LSTMClassifier,
     texts: list[str],
     vocab: Vocabulary,
     max_len: int = 256,
@@ -269,18 +338,19 @@ def predict(
     """
     Run inference on a list of preprocessed texts.
 
-    Returns:
-        List of predicted integer labels.
+    Returns
+    -------
+    List of predicted integer labels.
     """
     dataset = ReviewDataset(texts, [0] * len(texts), vocab, max_len)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    loader  = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     model.eval()
     preds = []
     with torch.no_grad():
         for batch in loader:
             input_ids = batch["input_ids"].to(device)
-            logits = model(input_ids)
+            logits    = model(input_ids)
             preds.extend(logits.argmax(dim=1).cpu().tolist())
 
     return preds
@@ -290,10 +360,8 @@ def predict(
 # 6.  Save / Load
 # ---------------------------------------------------------------------------
 
-def save(model: BiLSTMClassifier, vocab: Vocabulary, path: str) -> None:
-    """
-    Save the fitted pipeline to disk.
-    """
+def save(model: LSTMClassifier, vocab: Vocabulary, path: str) -> None:
+    """Save model weights and vocabulary to disk."""
     import pickle
     from pathlib import Path
 
@@ -301,10 +369,10 @@ def save(model: BiLSTMClassifier, vocab: Vocabulary, path: str) -> None:
     torch.save(model.state_dict(), path + ".pt")
     with open(path + ".vocab.pkl", "wb") as f:
         pickle.dump(vocab, f)
-    print(f"LSTM model saved to {path}.pt")
+    print(f"Model saved to {path}.pt")
 
 
-def load(path: str, device: str = "cpu") -> tuple[BiLSTMClassifier, Vocabulary]:
+def load(path: str, device: str = "cpu") -> tuple[LSTMClassifier, Vocabulary]:
     """Load model weights and vocabulary from disk."""
     import pickle
 
@@ -312,11 +380,23 @@ def load(path: str, device: str = "cpu") -> tuple[BiLSTMClassifier, Vocabulary]:
         vocab = pickle.load(f)
 
     state = torch.load(path + ".pt", map_location=device)
-    # Infer hidden_dim from saved weights
-    hidden_dim = state["classifier.weight"].shape[1] // 2
-    embed_dim = state["embedding.weight"].shape[1]
-    vocab_size = state["embedding.weight"].shape[0]
 
-    model = BiLSTMClassifier(vocab_size, embed_dim, hidden_dim).to(device)
+    # Infer architecture from saved weights
+    lstm_out_dim  = state["classifier.weight"].shape[1]
+    embed_dim     = state["embedding.weight"].shape[1]
+    vocab_size    = state["embedding.weight"].shape[0]
+    # lstm.weight_hh_l0 shape: (4*hidden, hidden) for classic
+    #                           (4*hidden, 2*hidden) for bidirectional
+    hidden_dim    = state["lstm.weight_hh_l0"].shape[0] // 4
+    bidirectional = (lstm_out_dim == hidden_dim * 2)
+    num_layers    = sum(1 for k in state if k.startswith("lstm.weight_ih_l"))
+
+    model = LSTMClassifier(
+        vocab_size=vocab_size,
+        embed_dim=embed_dim,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        bidirectional=bidirectional,
+    ).to(device)
     model.load_state_dict(state)
     return model, vocab
