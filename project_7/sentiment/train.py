@@ -85,6 +85,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_features", type=int, default=100_000)
     parser.add_argument("--C", type=float, default=1.0)
 
+    # Roberta specific
+    parser.add_argument("--num_layers_to_freeze", type=int, default=0)
+
     return parser.parse_args()
 
 
@@ -209,6 +212,7 @@ def _run_roberta(args, train_texts, train_labels, val_texts, val_labels,
         num_epochs=args.epochs or 3,
         lr=args.lr or 2e-5,
         device=args.device,
+        num_layers_to_freeze=args.num_layers_to_freeze,
     )
 
     print("\n--- Validation ---")

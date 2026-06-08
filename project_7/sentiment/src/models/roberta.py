@@ -64,13 +64,14 @@ def train(
     val_texts: list[str],
     val_labels: list[int],
     model_name: str = "roberta-base",
-    max_len: int = 512,
+    max_len: int = 512, # absolute max, can be devided by two to reduce computation by 4
     batch_size: int = 32,
     num_epochs: int = 3,
     lr: float = 2e-5,
     weight_decay: float = 0.01,
     warmup_ratio: float = 0.1,
     device: str = "cpu",
+    num_layers_to_freeze: int = 0
 ) -> tuple[RobertaForSequenceClassification, RobertaTokenizerFast]:
     """
     Fine-tune roberta-base for binary classification.
@@ -90,11 +91,26 @@ def train(
     Returns:
         (best_model, tokenizer)
     """
+
     print(f"Loading tokenizer and model: {model_name}")
     tokenizer = RobertaTokenizerFast.from_pretrained(model_name)
     model = RobertaForSequenceClassification.from_pretrained(
         model_name, num_labels=2
     ).to(device)
+
+    if num_layers_to_freeze == -1:
+        # We freeze everything exept the linear head
+        for name, param in model.roberta.named_parameters():
+            param.requires_grad = False
+    elif num_layers_to_freeze > 0:
+        # We freeze the Nth first layers (0 à 5 par exemple)
+        for name, param in model.roberta.embeddings.named_parameters():
+            param.requires_grad = False
+        for i in range(num_layers_to_freeze):
+            for name, param in model.roberta.encoder.layer[i].named_parameters():
+                param.requires_grad = False
+    else:
+        print("Full Fine-Tuning")
 
     print("Tokenising training data ...")
     train_ds = ReviewDataset(train_texts, train_labels, tokenizer, max_len)

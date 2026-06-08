@@ -1,12 +1,17 @@
 
---> do a light train with all trainable layers (100000 samples, 1 layer, lr = 0.001 and 100 dim (128 embed dim))
+--> does a light train with all trainable layers (100000 samples, 1 layer, lr = 0.001 and 100 dim (128 embed dim))
 python train.py --model lstm --train data/train.ft.txt --test data/test.ft.txt --max_train 100000 --num_layers 1 --embed_dim 100 --hidden_dim 128 --lr 1e-3
 
 --> change learning rate to see if there is any improvement (100000 samples, 1 layer, lr = 0.0001 and 100 dim (128 embed dim))
-python train.py --model lstm --train data/train.ft.txt --test data/test.ft.txt --max_train 5000 --lr 1e-4
+python train.py --model lstm --train data/train.ft.txt --test data/test.ft.txt --max_train 100000 --lr 1e-4
 
 --> change layers nb to see if there is any improvement (100000 samples, 3 layer, lr = 0.001 and 100 dim (128 embed dim))
 python train.py --model lstm --train data/train.ft.txt --test data/test.ft.txt --max_train 100000 --num_layers 3
 
 --> change dim_size to see if there is any improvement (100000 samples, 1 layer, lr = 0.001 and 200 dim (256 embed dim))
-python train.py --model lstm --train data/train.ft.txt --test data/test.ft.txt --max_train 5000 --embed_dim 200 --hidden_dim 256
+python train.py --model lstm --train data/train.ft.txt --test data/test.ft.txt --max_train 100000 --embed_dim 200 --hidden_dim 256
+
+
+
+--> does a very light train with all trainable layers (100 samples, 1 layer, lr = 0.00002 and only one epoch)
+python train.py --model roberta --train data/train.ft.txt --test data/test.ft.txt --max_train 1000 --max_len 256 --batch_size 16 --epochs 1 --lr 2e-5 --num_layers_to_freeze 0
