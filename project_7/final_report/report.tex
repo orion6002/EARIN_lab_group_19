@@ -1,28 +1,5 @@
 \documentclass{article}
 
-
-% if you need to pass options to natbib, use, e.g.:
-%     \PassOptionsToPackage{numbers, compress}{natbib}
-% before loading neurips_2024
-
-
-% ready for submission
-\usepackage[final]{neurips_2024}
-
-
-% to compile a preprint version, e.g., for submission to arXiv, add add the
-% [preprint] option:
-%     \usepackage[preprint]{neurips_2024}
-
-
-% to compile a camera-ready version, add the [final] option, e.g.:
-%     \usepackage[final]{neurips_2024}
-
-
-% to avoid loading the natbib package, add option nonatbib:
-%    \usepackage[nonatbib]{neurips_2024}
-
-
 \usepackage[utf8]{inputenc} % allow utf-8 input
 \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
 \usepackage{hyperref}       % hyperlinks
@@ -32,30 +9,14 @@
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
+\usepackage{graphicx}       % figures
+\graphicspath{{./}{final_report/}}
 
-
-\title{Preliminary Report For Project 7\\Sentiment Analysis}
-
-
-% The \author macro works with any number of authors. There are two commands
-% used to separate the names and addresses of multiple authors: \And and \AND.
-%
-% Using \And between authors leaves it to LaTeX to determine where to break the
-% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
-% authors names on the first line, and the last on the second line, try using
-% \AND instead of \And before the third author name.
-
+\title{Final Report - Project 7\\Sentiment Analysis}
 
 \author{
-  Nolan Capomaggio \\
   Group 19 \\
-  French Erasmus Student\\at Warsaw University of Technology \\
-  \And
-  Mathis Morra-Fisher \\
-  Group 19 \\
-  French Erasmus Student\\at Warsaw University of Technology \\
-  \AND
-%   \texttt{\url{https://github.com/orion6002/EARIN\_lab\_group\_19}}
+  Nolan Capomaggio and Mathis Morra-Fischer \\
 }
 
 
@@ -65,206 +26,292 @@
 \maketitle
 
 \begin{abstract}
-  Sentiment analysis is a key task in Natural Language Processing (NLP), 
-  aiming to automatically determine the emotional polarity of a given text. 
-  In this work, the goal is to address binary sentiment classification of Amazon 
-  product reviews. We distinguish positive (4–5 stars) from negative (1–2 stars) 
-  review. We use the Amazon Reviews dataset (Kaggle, Adam Bittlingmayer), 
-  which includes approximately 4 million labeled reviews. We propose to compare 
-  three approaches of increasing complexity: Logistic Regression with TF-IDF 
-  features, a LSTM neural network, and a fine-tuned RoBERTa 
-  model. Models are evaluated using accuracy and macro F1-score.
+This project studies binary sentiment classification on the Amazon Reviews
+dataset. Reviews are classified as negative or positive using TF-IDF with
+Logistic Regression, a configurable LSTM/BiLSTM neural network, and reduced
+RoBERTa fine-tuning experiments. The final experiments focus on reproducibility,
+dataset-size reduction, hyperparameter sensitivity, regularization, and
+computational cost. Logistic Regression remains the strongest practical
+baseline, reaching 94.07\% accuracy on the full test set. On a 100k-sample
+experiment, Logistic Regression reaches 91.34\% test accuracy in 11.6 seconds,
+while the best LSTM configuration reaches 90.71\% but requires around 9
+minutes. The best reduced RoBERTa experiment reaches 94.25\% test accuracy on a
+5k-sample setup, but requires substantially more runtime than Logistic
+Regression.
 \end{abstract}
 
-
 \section{Introduction}
-For large companies as Amazon, being able to classify good and bad reviews is 
-mandatory in order to be able to satisfy the custommer. Knowing this, our 
-goal is to developp a thrustworthy solution to tackle this issue. Our solution 
-is known as sentiment analysis.
+Sentiment analysis is a standard Natural Language Processing task where the
+goal is to automatically detect the polarity of a text. In this project, we
+work on binary sentiment classification of Amazon product reviews. The label
+$0$ represents negative reviews and the label $1$ represents positive reviews.
 
-In this project, we frame sentiment analysis as a \textbf{binary text classification}
-problem.
-Given the text of an Amazon product review, the goal is to predict a label
-$y \in \{0, 1\}$, where $0$ denotes a negative review (1–2 stars) and $1$ denotes
-a positive review (4–5 stars).
-Reviews rated 3 stars (neutral) are excluded from the dataset by construction,
-so no neutral class is considered.
+The project compares methods of increasing complexity. Logistic Regression with
+TF-IDF is used as a fast and interpretable baseline. LSTM models are used to
+test whether sequence modeling improves performance. A RoBERTa pipeline is used
+to evaluate whether partial transformer fine-tuning improves accuracy enough to
+justify its additional cost.
 
-We use the Amazon Reviews dataset published by Bittlingmayer on Kaggle,
-which provides 3.6 million training examples and 400,000 test examples in fastText
-format.
-We propose to compare three methods of increasing complexity: a Logistic Regression
-classifier with TF-IDF features, a Long Short-Term Memory (LSTM) recurrent neural
-network, and a fine-tuned RoBERTa transformer model.
-
-
-\section{Dataset}
-We use the Amazon Reviews dataset from Kaggle (\url{https://www.kaggle.com/datasets
-/bittlingmayer/amazonreviews}). 
-Each line is formatted as a fastText label followed by the review text:
-\texttt{\_\_label\_\_1} corresponds to a negative review (1--2 stars) and
-\texttt{\_\_label\_\_2} corresponds to a positive review (4--5 stars).
-Three-star reviews are excluded by construction, so the task is strictly binary.
-It contains approximately 4 million labeled reviews.
-
-\subsection{Data Balance \& Splits}
-The two classes are distributed equally: exactly 50\% negative and 50\% positive
-in both the training and test splits.
-The dataset is therefore \textbf{perfectly balanced}, and no oversampling or
-undersampling is required.\\
-The dataset contains approximately 4 millions entries. It is already splitted into 
-a training part and a test part with a ratio of 90/10 (which is enough because the 
-testing part is already consituated of 400 000 entries). This is considered a 
-standard for this kind of dataset.
-
-\subsection{Preprocessing}
-For all methods implemented we have to do a based preprocess. The \texttt{\_\_label\_\_X}
-prefix is stripped.
-The text itself requires cleaning because it is written by humans which are not reliable 
-and use special characters. We will remove HTML tags, special characters and unnecessary 
-punctuation. We will also convert text to lowercase to prevent taking uppercased words 
-as different words.\\
-For each models that we are going to use, we have to do a different preprocessing in 
-order to make them more efficient.\\
-
-- For Logistic Regression we will use TF-IDF (Term Frequency-Inverse Document Frequency). 
-This turns text into a numerical matrix. It highlights words that are important to s
-pecific reviews.\\
-- For LSTM, the text will be converted into sequences of integers. We will use padding 
-to ensure all inputs have the same length. We will also use pre-trained word 
-embeddings to represent semantic meaning.\\
-- The RoBERTa is the one with the most advanced preprocessing. We have to use a 
-byte-level Byte-Pair Encoding tokenizer. This handles rare words by breaking them into 
-smaller sub-units. Then We will add the <s> (start of string) and </s> (separator) 
-tokens. The model uses the representation of the first token for classification. And 
-finaly we have to create masks to tell the model which parts of the input are real text 
-and which are only padding.
-
-
-\subsection{Evaluation Metrics}
-We want to collect the following metrics during tests:
+\section{Dataset and Preprocessing}
+We use the Amazon Reviews dataset from Kaggle by Adam Bittlingmayer. The
+dataset is already formatted for fastText:
 \begin{itemize}
-  \item \textbf{Accuracy}: the proportion of correctly classified examples.
-    This is a valid primary metric here because the dataset is perfectly balanced.
-  \item \textbf{Macro F1-score}: the unweighted mean of per-class F1 scores.
-    It provides a more robust basis for comparing methods, particularly as a
-    cross-benchmark reference.
-  \item \textbf{Precision and Recall} per class: to identify asymmetric error
-    patterns (e.g., a model biased toward predicting positive).
-  \item \textbf{Confusion matrix}: for qualitative analysis of error types.
-\end{itemize} We will compare our results to the 
-top scores on the website. Based on the Kaggle leaderboard and existing literature for this 
-dataset, the state-of-the-art accuracy is approximately 92–94\%. Our goal is to approach 
-this upper bound using the RoBERTa model.
+  \item \texttt{\_\_label\_\_1}: negative review, mapped to class 0;
+  \item \texttt{\_\_label\_\_2}: positive review, mapped to class 1.
+\end{itemize}
+The full dataset contains 3.6 million training reviews and 400,000 official test
+reviews. The classes are balanced, so accuracy is a meaningful metric.
 
-\section{Solution Description}
+The training file is split into train and validation subsets using a stratified
+80/20 split. This preserves the 50/50 class balance. All experiments use seed
+42 unless otherwise stated. The code fixes Python, NumPy, and PyTorch random
+seeds, and passes the seed to the model-specific training components.
 
-\subsection{Overview}
+The shared preprocessing removes HTML tags, lowercases the text, and normalizes
+whitespace. Punctuation is kept because it may carry sentiment information.
 
-For our project we will be using three different methods:
-\textit{Logistic Regression} represent documents as sparse
-bag-of-words or TF-IDF vectors and train linear or kernel-based classifiers
-\cite{pang2002thumbs}.
-\textit{LSTM} model is a sequential structure of text and
-capture order-dependent patterns; Long Short-Term Memory (LSTM) networks are the 
-most used in this type of processing.
-\textit{RoBERTa} such as BERT and its successors achieve state-of-the-art results 
-combining large-scale unsupervised pre-training with task-specific fine-tuning.
-
-The choice of method focuses on quantifing the performance gain at each level of
-complexity and to evaluate whether the additional computational cost of
-more advanced models is justified on this particular dataset.
-
+\section{Implemented Methods}
 \subsection{Logistic Regression with TF-IDF}
+The baseline uses a \texttt{scikit-learn} pipeline composed of:
+\begin{itemize}
+  \item TF-IDF vectorization with unigrams and bigrams;
+  \item a maximum vocabulary size of 100,000 features;
+  \item \texttt{min\_df=2} to remove very rare terms;
+  \item sublinear term-frequency scaling;
+  \item Logistic Regression with $\ell_2$ regularization and $C=1.0$.
+\end{itemize}
 
-Logistic Regression trained on TF-IDF features serves as our baseline.
-The method is fast, fully interpretable, and has been shown to yield competitive
-accuracy on large-scale review datasets.
+This approach does not model long-distance word order, but it is very efficient
+on large text datasets and gives a strong reference point.
 
-\paragraph{Feature extraction}
-TF-IDF (Term Frequency – Inverse Document Frequency) assigns a weight to each
-word in a document that reflects how informative that word is relative to the
-entire corpus.
-We can construct a TF-IDF matrix using unigrams and bigrams, retaining the top
-100,000 features ranked by term frequency.
-We fit a Logistic Regression classifier with $\ell_2$ regularization using the
-\texttt{scikit-learn} implementation.
+\subsection{LSTM / BiLSTM}
+The LSTM implementation contains:
+\begin{itemize}
+  \item a vocabulary built from the training set;
+  \item integer encoding and padding/truncation to a fixed sequence length;
+  \item an embedding layer;
+  \item one or more LSTM layers, optionally bidirectional;
+  \item global max pooling over the sequence dimension;
+  \item dropout;
+  \item a final linear classifier.
+\end{itemize}
 
-\paragraph{Motivation}
-This method acts as a strong reference point: any more complex model must
-surpass it to justify its additional cost in training time and computational
-resources, it is a fast method (not time consuming) but not so efficient.
-
-\subsection{Long Short-Term Memory Network}
-
-LSTM networks are a class of recurrent neural
-networks designed to capture long-range dependencies in sequential data.
-Each LSTM cell maintains a memory state that is updated at every time step
-through learned gating mechanisms (input, forget, and output gates), which
-mitigate the vanishing gradient problem of vanilla RNNs.
-
-\paragraph{Training.}
-The model is trained with the Adam optimizer and
-binary cross-entropy loss for up to 5 epochs with early stopping based on
-validation F1-score for allowing training in a resonable time.
-
-\paragraph{Motivation.}
-Compared to the TF-IDF baseline, LSTM captures word order and local context.
-It represents an intermediate complexity level and does not require a GPU
-for inference, making it a practical middle choice.
+The model is trained with Adam and cross-entropy loss. We added several
+hyperparameters to support final experiments: learning rate, embedding size,
+hidden size, number of layers, bidirectionality, dropout, weight decay, frozen
+embedding layer, and seed-controlled data loading. The training script writes a
+\texttt{metrics.json} file and, for neural models, a
+\texttt{training\_history.json} file.
 
 \subsection{RoBERTa}
+The RoBERTa pipeline uses the Hugging Face Transformers library with
+\texttt{roberta-base}. It supports full fine-tuning, freezing the first $N$
+encoder layers, or freezing the whole encoder and training only the
+classification head. Because full fine-tuning is expensive, the final RoBERTa
+experiments freeze a large part of the encoder and fine-tune only the upper
+transformer layers plus the classification head. This makes RoBERTa feasible on
+the available laptop while still allowing the model to adapt to the sentiment
+task.
 
-RoBERTa (Robustly Optimized BERT Pretraining Approach) 
-is a transformer encoder pre-trained on a large
-English text corpus.
-It improves over the original BERT model by removing
-the Next Sentence Prediction objective, and training with larger batches and 
-more data. These modifications consistently improve downstream classification 
-performance.
+\section{Experimental Protocol}
+We evaluate models with accuracy, macro F1-score, macro precision, and macro
+recall. Runtime is also recorded because the professor specifically asked us to
+compare whether additional complexity improves accuracy enough to justify the
+computation time.
 
-\paragraph{Architecture.}
-We fine-tune the \texttt{roberta-base} checkpoint 
-from the Hugging Face Transformers library.
-A linear classification head is added on top of the representation of the
-\texttt{<s>} (start-of-sequence) token, which aggregates contextual information
-from the entire input.
+The experiments are organized around the following questions:
+\begin{itemize}
+  \item How much can the dataset be reduced while still obtaining useful
+  performance?
+  \item Does LSTM improve over Logistic Regression?
+  \item How sensitive is LSTM to the learning rate?
+  \item Does increasing model capacity improve results?
+  \item Do dropout and weight decay reduce overfitting or improve accuracy?
+\end{itemize}
 
-\paragraph{Fine-tuning.}
-Fine-tuning is performed for up to 3 epochs with a learning rate of
-$2 \times 10^{-5}$, linear warmup over the first 10\% of steps, and weight
-decay of 0.01.
-The batch size is set to 32.
+\section{Results}
+\subsection{Dataset Reduction with Logistic Regression}
+Table~\ref{tab:logreg-data} shows that Logistic Regression performs well even
+with a small fraction of the training set.
 
-\paragraph{Motivation.}
-RoBERTa represents the state-of-the-art family of methods for text
-classification.
-Its inclusion allows us to measure the benefit of large-scale pre-trained
-contextual representations over task-specific architectures trained from
-scratch.
+\begin{table}[h]
+  \centering
+  \caption{Logistic Regression results when reducing the training set size.}
+  \label{tab:logreg-data}
+  \begin{tabular}{rrrr}
+    \toprule
+    Loaded train examples & Test examples & Test accuracy & Runtime (s) \\
+    \midrule
+    2,000 & 2,000 & 0.8145 & 4.25 \\
+    10,000 & 5,000 & 0.8698 & 2.27 \\
+    100,000 & 20,000 & 0.9134 & 11.57 \\
+    Full dataset & 400,000 & 0.9407 & 465.00 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\linewidth]{logistic_data_curve.png}
+  \caption{Effect of training-set size on Logistic Regression test accuracy.}
+  \label{fig:logreg-data}
+\end{figure}
+
+The first important finding is that only 2,000 loaded training examples already
+give 81.45\% test accuracy. This is above the 70--80\% threshold discussed at
+the midterm. Increasing the dataset to 100,000 examples improves accuracy to
+91.34\%, and the full-dataset run reached 94.07\% in 465 seconds.
+
+\subsection{LSTM Hyperparameter Experiments}
+All LSTM experiments below use 100,000 loaded training examples, 20,000 test
+examples, 3 epochs, seed 42, and sequence length 256.
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{LSTM experiment results.}
+  \label{tab:lstm-results}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Configuration & Test accuracy & Macro F1 & Val accuracy & Runtime (s) \\
+    \midrule
+    BiLSTM, lr=$10^{-3}$ & 0.9071 & 0.9069 & 0.9104 & 535.09 \\
+    BiLSTM, lr=$10^{-4}$ & 0.8018 & 0.8001 & 0.8007 & 529.24 \\
+    BiLSTM, 3 layers & 0.9070 & 0.9068 & 0.9093 & 1599.01 \\
+    BiLSTM, dropout=0.5 & 0.8963 & 0.8959 & 0.8967 & 528.18 \\
+    BiLSTM, weight decay=$10^{-4}$ & 0.9014 & 0.9010 & 0.9023 & 535.75 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.92\linewidth]{experiment_accuracy_comparison.png}
+  \caption{Comparison of selected Logistic Regression, LSTM, and RoBERTa experiments.}
+  \label{fig:accuracy-comparison}
+\end{figure}
+
+\subsection{RoBERTa Experiments}
+Table~\ref{tab:roberta-results} shows the reduced RoBERTa experiments. The
+first run freezes the whole encoder and trains only the classification head.
+The later runs unfreeze the top transformer layers, which gives the model
+enough capacity to adapt to the sentiment task.
+
+\begin{table}[h]
+  \centering
+  \caption{Reduced RoBERTa fine-tuning results.}
+  \label{tab:roberta-results}
+  \small
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Configuration & Train & Test & Epochs & Test accuracy & Runtime (s) \\
+    \midrule
+    Head only & 500 & 500 & 1 & 0.4820 & 35.35 \\
+    Freeze 10 layers & 1,000 & 1,000 & 1 & 0.9020 & 70.22 \\
+    Freeze 10 layers & 5,000 & 2,000 & 1 & 0.9330 & 270.53 \\
+    Freeze 8 layers & 5,000 & 2,000 & 1 & 0.9380 & 352.34 \\
+    Freeze 8 layers & 5,000 & 2,000 & 2 & 0.9425 & 707.03 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The head-only run is close to random guessing. This is expected because the
+classification head starts from random weights while the frozen encoder cannot
+adapt to the task. Once the upper transformer layers are unfrozen, RoBERTa
+improves sharply. With 5,000 loaded training examples, freezing the first 8
+layers and training for 2 epochs reaches 94.25\% test accuracy, the best result
+among our reduced experiments.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.78\linewidth]{roberta_validation_curves.png}
+  \caption{Validation accuracy curves for the RoBERTa experiments.}
+  \label{fig:roberta-curves}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.78\linewidth]{lstm_validation_curves.png}
+  \caption{Validation accuracy curves for the LSTM experiments.}
+  \label{fig:lstm-curves}
+\end{figure}
+
+\section{Discussion}
+\subsection{Learning Rate}
+The learning rate has a strong effect on LSTM performance. With
+$lr=10^{-3}$, the model reaches 90.71\% test accuracy. With $lr=10^{-4}$, the
+test accuracy drops to 80.18\%. The validation history shows that the smaller
+learning rate is still improving after 3 epochs, so the problem is likely
+undertraining rather than overfitting. A lower learning rate may require more
+epochs to converge.
+
+\subsection{Model Capacity}
+Increasing the LSTM from 1 layer to 3 layers does not improve test accuracy:
+90.70\% versus 90.71\%. Runtime increases from about 535 seconds to 1599
+seconds. This is a clear negative result: extra depth increases compute time
+without meaningful accuracy gain. It may also increase optimization difficulty
+and risk of overfitting if trained longer.
+
+\subsection{Regularization}
+Increasing dropout from 0.3 to 0.5 reduces test accuracy from 90.71\% to
+89.63\%. Adding weight decay of $10^{-4}$ reaches 90.14\%, also below the
+baseline LSTM. In these runs, stronger regularization did not improve the final
+score. The baseline LSTM does not show strong overfitting after 3 epochs because
+validation accuracy continues to improve while training loss decreases.
+
+\subsection{Logistic Regression vs LSTM}
+The most important conclusion is that Logistic Regression is still the best
+accuracy/time trade-off. On the 100k experiment, Logistic Regression reaches
+91.34\% test accuracy in 11.57 seconds. The best LSTM reaches 90.71\% but takes
+around 535 seconds. Therefore, on this dataset, the additional sequence-modeling
+capacity of LSTM does not justify its computational cost.
+
+This result is explainable. Amazon sentiment reviews often contain strong local
+lexical cues such as ``great'', ``bad'', ``waste of money'', or ``not good''.
+TF-IDF with bigrams captures many of these patterns efficiently. LSTM can model
+word order, but the gain is limited because the dataset is large and the
+baseline features are already very informative.
+
+\subsection{RoBERTa Trade-off}
+RoBERTa becomes the strongest reduced-data model once upper layers are unfrozen.
+The best RoBERTa run reaches 94.25\% test accuracy with only 5,000 loaded
+training examples, which is higher than Logistic Regression on 100,000 loaded
+examples. However, this comes at a much higher computational cost: the 2-epoch
+RoBERTa run takes 707 seconds, compared with 11.57 seconds for Logistic
+Regression on 100,000 examples. This shows that transformer fine-tuning can
+improve accuracy, but the improvement must be weighed against runtime and
+hardware requirements.
+
+\section{Limitations}
+RoBERTa was evaluated only on reduced subsets, not on the full dataset. This
+means the reported RoBERTa result should be interpreted as a strong reduced-data
+experiment, not as a full benchmark of the transformer model. Full fine-tuning
+on the complete dataset would likely require more memory and more time than was
+available on the laptop.
+
+Another limitation is that we did not perform a full grid search. Instead, we
+selected targeted experiments based on the midterm feedback: dataset reduction,
+learning rate, model depth, dropout, and weight decay.
 
 \section{Conclusion}
-We have described the dataset, evaluation protocol, and three methods for
-binary sentiment classification of Amazon product reviews.
-The Amazon Reviews dataset is large, perfectly balanced, and requires only
-minimal preprocessing; no class rebalancing technique is needed.
-Our three methods – Logistic Regression with TF-IDF, LSTM, and RoBERTa – 
-span the full range from a lightweight and interpretable baseline to a
-state-of-the-art transformer model, enabling a controlled comparison of
-performance versus computational cost.
-In the next stage of the project, we will implement all three pipelines,
-compare their accuracy and macro F1-score on the validation set, and
-investigate the impact of key design choices such as vocabulary size,
-sequence length, and fine-tuning strategy.
+The final project implemented a complete reproducible sentiment classification
+pipeline and compared classical and neural approaches. Logistic Regression with
+TF-IDF is a very strong baseline: it reaches 94.07\% accuracy on the full test
+set in 465 seconds, and already reaches 91.34\% with only 100,000 loaded
+training examples.
 
-\section*{References}
+The LSTM experiments show that neural sequence models are sensitive to
+hyperparameters. A learning rate of $10^{-3}$ works much better than
+$10^{-4}$ for 3 epochs. Adding layers, dropout, or weight decay did not improve
+the result in our experiments. The best LSTM reaches about 90.71\% test
+accuracy, slightly below Logistic Regression on the same 100k setup while being
+much slower.
 
-{\small
-[1] NeurIPS\ (2024) Call for Papers\\ \url{https://neurips.cc/Conferences/2024/CallForPapers}
-
-[2] Adam Bittlingmayer\ (2020) Amazon Reviews for Sentiment Analysis\\ \url{https://www.kaggle.com/datasets/bittlingmayer/amazonreviews}
-}
+RoBERTa gives the best reduced-data accuracy when partially unfrozen, reaching
+94.25\% with 5,000 loaded training examples. The main conclusion is therefore
+more nuanced: Logistic Regression gives the best performance-cost trade-off,
+while RoBERTa gives the best accuracy in our reduced experiments but requires
+significantly more compute. More complex models must be justified not only by
+accuracy, but also by runtime, hardware requirements, and practical usefulness.
 
 \end{document}

@@ -9,24 +9,33 @@ from typing import Optional
 
 import numpy as np
 
-os.environ.setdefault(
-    "MPLCONFIGDIR",
-    str(Path(__file__).resolve().parents[2] / "out" / ".matplotlib"),
-)
 
-import matplotlib
+def confusion_matrix_binary(y_true: list[int], y_pred: list[int]) -> np.ndarray:
+    """Return a 2x2 confusion matrix with rows=true labels and columns=predictions."""
+    cm = np.zeros((2, 2), dtype=int)
+    for true, pred in zip(y_true, y_pred):
+        cm[int(true), int(pred)] += 1
+    return cm
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
-    confusion_matrix,
-    classification_report,
-)
+
+def _safe_div(num: float, den: float) -> float:
+    return num / den if den else 0.0
+
+
+def _class_report_row(cm: np.ndarray, cls: int) -> dict:
+    tp = cm[cls, cls]
+    fp = cm[1 - cls, cls]
+    fn = cm[cls, 1 - cls]
+    support = cm[cls].sum()
+    precision = _safe_div(tp, tp + fp)
+    recall = _safe_div(tp, tp + fn)
+    f1 = _safe_div(2 * precision * recall, precision + recall)
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "support": int(support),
+    }
 
 
 def evaluate(y_true: list[int], y_pred: list[int], model_name: str = "") -> dict:
@@ -41,10 +50,15 @@ def evaluate(y_true: list[int], y_pred: list[int], model_name: str = "") -> dict
     Returns:
         Dictionary of metric name -> value.
     """
-    acc = accuracy_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred, average="macro")
-    precision = precision_score(y_true, y_pred, average="macro", zero_division=0)
-    recall = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    cm = confusion_matrix_binary(y_true, y_pred)
+    total = cm.sum()
+    acc = _safe_div(cm.trace(), total)
+
+    neg = _class_report_row(cm, 0)
+    pos = _class_report_row(cm, 1)
+    f1 = (neg["f1"] + pos["f1"]) / 2
+    precision = (neg["precision"] + pos["precision"]) / 2
+    recall = (neg["recall"] + pos["recall"]) / 2
 
     results = {
         "accuracy": acc,
@@ -59,7 +73,15 @@ def evaluate(y_true: list[int], y_pred: list[int], model_name: str = "") -> dict
     print(f"  Macro F1  : {f1:.4f}")
     print(f"  Precision : {precision:.4f}")
     print(f"  Recall    : {recall:.4f}")
-    print(classification_report(y_true, y_pred, target_names=["Negative", "Positive"]))
+    print("\n              precision    recall  f1-score   support\n")
+    print(
+        f"    Negative       {neg['precision']:.2f}      {neg['recall']:.2f}"
+        f"      {neg['f1']:.2f}      {neg['support']:>6}"
+    )
+    print(
+        f"    Positive       {pos['precision']:.2f}      {pos['recall']:.2f}"
+        f"      {pos['f1']:.2f}      {pos['support']:>6}"
+    )
 
     return results
 
@@ -79,7 +101,17 @@ def plot_confusion_matrix(
         model_name: Title prefix.
         save_path: If provided, save the figure to this path.
     """
-    cm = confusion_matrix(y_true, y_pred)
+    os.environ.setdefault(
+        "MPLCONFIGDIR",
+        str(Path(__file__).resolve().parents[2] / "out" / ".matplotlib"),
+    )
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    cm = confusion_matrix_binary(y_true, y_pred)
     fig, ax = plt.subplots(figsize=(5, 4))
     sns.heatmap(
         cm,

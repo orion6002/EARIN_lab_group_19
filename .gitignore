@@ -427,3 +427,6 @@ FodyWeavers.xsd
 lab_4/figures/final_model_results.csv
 # *.png
 .vscode/settings.json
+*.fdb_latexmk
+*.fls
+*.gz

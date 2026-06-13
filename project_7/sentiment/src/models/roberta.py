@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from transformers import (
-    RobertaTokenizerFast,
-    RobertaForSequenceClassification,
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
     get_linear_schedule_with_warmup,
 )
 from tqdm import tqdm
@@ -30,7 +30,7 @@ class ReviewDataset(Dataset):
         self,
         texts: list[str],
         labels: list[int],
-        tokenizer: RobertaTokenizerFast,
+        tokenizer,
         max_len: int = 512,
     ) -> None:
         self.labels = labels
@@ -71,8 +71,10 @@ def train(
     weight_decay: float = 0.01,
     warmup_ratio: float = 0.1,
     device: str = "cpu",
-    num_layers_to_freeze: int = 0
-) -> tuple[RobertaForSequenceClassification, RobertaTokenizerFast]:
+    num_layers_to_freeze: int = 0,
+    seed: int = 42,
+    num_workers: int = 0,
+) -> tuple:
     """
     Fine-tune roberta-base for binary classification.
 
@@ -87,27 +89,37 @@ def train(
         weight_decay: L2 regularization coefficient.
         warmup_ratio: Fraction of total steps used for warmup.
         device: "cpu" or "cuda".
+        seed: Random seed used by the training DataLoader.
+        num_workers: DataLoader workers; 0 is safest on macOS/sandboxed runs.
 
     Returns:
         (best_model, tokenizer)
     """
 
     print(f"Loading tokenizer and model: {model_name}")
-    tokenizer = RobertaTokenizerFast.from_pretrained(model_name)
-    model = RobertaForSequenceClassification.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    model = AutoModelForSequenceClassification.from_pretrained(
         model_name, num_labels=2
     ).to(device)
 
+    base_model = getattr(model, "roberta", getattr(model, "base_model", None))
+    if base_model is None:
+        raise ValueError(f"Cannot find a base transformer module for {model_name}")
+
     if num_layers_to_freeze == -1:
         # We freeze everything exept the linear head
-        for name, param in model.roberta.named_parameters():
+        for name, param in base_model.named_parameters():
             param.requires_grad = False
     elif num_layers_to_freeze > 0:
         # We freeze the Nth first layers (0 à 5 par exemple)
-        for name, param in model.roberta.embeddings.named_parameters():
-            param.requires_grad = False
-        for i in range(num_layers_to_freeze):
-            for name, param in model.roberta.encoder.layer[i].named_parameters():
+        if hasattr(base_model, "embeddings"):
+            for name, param in base_model.embeddings.named_parameters():
+                param.requires_grad = False
+        available_layers = len(base_model.encoder.layer)
+        layers_to_freeze = min(num_layers_to_freeze, available_layers)
+        print(f"Freezing first {layers_to_freeze}/{available_layers} encoder layers")
+        for i in range(layers_to_freeze):
+            for name, param in base_model.encoder.layer[i].named_parameters():
                 param.requires_grad = False
     else:
         print("Full Fine-Tuning")
@@ -116,10 +128,16 @@ def train(
     train_ds = ReviewDataset(train_texts, train_labels, tokenizer, max_len)
     val_ds = ReviewDataset(val_texts, val_labels, tokenizer, max_len)
 
+    generator = torch.Generator()
+    generator.manual_seed(seed)
     train_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True, num_workers=2
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        generator=generator,
     )
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -133,6 +151,7 @@ def train(
 
     best_val_acc = 0.0
     best_state = None
+    history = []
 
     for epoch in range(num_epochs):
         # --- Training ---
@@ -177,12 +196,19 @@ def train(
 
         val_acc = correct / total
         print(f"  Epoch {epoch + 1}: loss={avg_loss:.4f}  val_acc={val_acc:.4f}")
+        history.append({
+            "epoch": epoch + 1,
+            "train_loss": avg_loss,
+            "val_accuracy": val_acc,
+        })
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
 
-    model.load_state_dict(best_state)
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    model.training_history = history
     print(f"Best validation accuracy: {best_val_acc:.4f}")
     return model, tokenizer
 
@@ -193,8 +219,8 @@ def train(
 
 
 def predict(
-    model: RobertaForSequenceClassification,
-    tokenizer: RobertaTokenizerFast,
+    model,
+    tokenizer,
     texts: list[str],
     max_len: int = 512,
     batch_size: int = 64,
@@ -226,15 +252,15 @@ def predict(
 # ---------------------------------------------------------------------------
 
 
-def save(model: RobertaForSequenceClassification, tokenizer: RobertaTokenizerFast, path: str) -> None:
+def save(model, tokenizer, path: str) -> None:
     """Save fine-tuned model and tokenizer to a directory."""
     model.save_pretrained(path)
     tokenizer.save_pretrained(path)
     print(f"RoBERTa model saved to {path}/")
 
 
-def load(path: str, device: str = "cpu") -> tuple[RobertaForSequenceClassification, RobertaTokenizerFast]:
+def load(path: str, device: str = "cpu") -> tuple:
     """Load fine-tuned model and tokenizer from a directory."""
-    tokenizer = RobertaTokenizerFast.from_pretrained(path)
-    model = RobertaForSequenceClassification.from_pretrained(path).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(path, use_fast=True)
+    model = AutoModelForSequenceClassification.from_pretrained(path).to(device)
     return model, tokenizer

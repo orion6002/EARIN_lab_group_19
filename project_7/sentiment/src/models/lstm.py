@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, Subset
 from tqdm import tqdm
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +135,7 @@ class LSTMClassifier(nn.Module):
         bidirectional: bool = True,
         dropout: float = 0.3,
         pad_idx: int = 0,
-        pretrained_embeddings: np.ndarray | None = None,
+        pretrained_embeddings: Optional[np.ndarray] = None,
         freeze_embedding: bool = False,
         freeze_classifier: bool = False,
     ) -> None:
@@ -209,7 +210,7 @@ def train(
     embed_dim: int = 100,
     hidden_dim: int = 128,
     dropout: float = 0.3,
-    pretrained_embeddings: np.ndarray | None = None,
+    pretrained_embeddings: Optional[np.ndarray] = None,
     # ---- layer freezing ----
     freeze_embedding: bool = False,
     freeze_classifier: bool = False,
@@ -217,7 +218,10 @@ def train(
     batch_size: int = 64,
     num_epochs: int = 5,
     lr: float = 1e-3,
-    train_size: int | None = None,   # limit training examples (None = all)
+    weight_decay: float = 0.0,
+    train_size: Optional[int] = None,   # limit training examples (None = all)
+    seed: int = 42,
+    num_workers: int = 0,
     device: str = "cpu",
 ) -> LSTMClassifier:
     """
@@ -231,6 +235,8 @@ def train(
     freeze_classifier: freeze the linear head (last layer)
     train_size      : use only this many training examples (reproducible subset)
     lr              : Adam learning rate
+    weight_decay    : L2 regularization used by Adam
+    num_workers     : DataLoader workers; 0 is safest on macOS/sandboxed runs
 
     Returns
     -------
@@ -249,14 +255,23 @@ def train(
 
     val_ds = ReviewDataset(val_texts, val_labels, vocab, max_len)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=2)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=2)
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        generator=generator,
+    )
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     # ---- Build model ----
     mode = "BiLSTM" if bidirectional else "LSTM"
     print(
         f"\nBuilding {mode} | layers={num_layers} | hidden={hidden_dim} "
-        f"| embed={embed_dim} | lr={lr} | freeze_emb={freeze_embedding} "
+        f"| embed={embed_dim} | lr={lr} | dropout={dropout} "
+        f"| weight_decay={weight_decay} | freeze_emb={freeze_embedding} "
         f"| freeze_clf={freeze_classifier}"
     )
 
@@ -276,11 +291,14 @@ def train(
 
     # Only pass parameters that require gradients to the optimizer
     trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(trainable_params, lr=lr)
+    if not trainable_params:
+        raise ValueError("No trainable parameters left. Check frozen layer options.")
+    optimizer = torch.optim.Adam(trainable_params, lr=lr, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss()
 
     best_val_acc = 0.0
     best_state = None
+    history = []
 
     for epoch in range(num_epochs):
         # ---- Training pass ----
@@ -294,6 +312,7 @@ def train(
             logits = model(input_ids)
             loss = criterion(logits, labels)
             loss.backward()
+            nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
             optimizer.step()
             total_loss += loss.item()
 
@@ -313,12 +332,19 @@ def train(
 
         val_acc = correct / total
         print(f"  Epoch {epoch + 1}: loss={avg_loss:.4f}  val_acc={val_acc:.4f}")
+        history.append({
+            "epoch": epoch + 1,
+            "train_loss": avg_loss,
+            "val_accuracy": val_acc,
+        })
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
 
-    model.load_state_dict(best_state)
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    model.training_history = history
     print(f"\nBest validation accuracy: {best_val_acc:.4f}")
     return model
 
