@@ -7,8 +7,13 @@ Common dataset paths:
 After experiments, aggregate tables with:
   python3 sentiment/aggregate_results.py --root sentiment/out/experiments --output sentiment/out/experiments/results.csv
 
+Only commands marked [FINAL REPORT] correspond to experiments included in
+final_report/report.tex and sentiment/out/experiments/results.csv.
+Commands marked [EXPLORATORY / NOT INCLUDED] were planned or exploratory runs
+and are kept only as optional follow-up experiments.
 
-1) Logistic Regression: how much data is enough?
+
+1) Logistic Regression: how much data is enough? [FINAL REPORT]
 
 python3 sentiment/train.py --model logistic --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 2000 --max_test 2000 --output_dir sentiment/out/experiments/logistic_2k --seed 42
 
@@ -19,7 +24,7 @@ python3 sentiment/train.py --model logistic --train sentiment/data/train.ft.txt 
 python3 sentiment/train.py --model logistic --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --output_dir sentiment/out/experiments/logistic_full --seed 42
 
 
-2) LSTM baseline and learning-rate comparison
+2) LSTM baseline and learning-rate comparison [FINAL REPORT]
 
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 100 --hidden_dim 128 --num_layers 1 --lr 1e-3 --dropout 0.3 --output_dir sentiment/out/experiments/lstm_lr_1e-3 --seed 42 --no_plots
 
@@ -28,43 +33,60 @@ python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --te
 
 3) LSTM capacity: hidden size and number of layers
 
+[EXPLORATORY / NOT INCLUDED IN FINAL REPORT]
+
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 200 --hidden_dim 256 --num_layers 1 --lr 1e-3 --dropout 0.3 --output_dir sentiment/out/experiments/lstm_dim_200_256 --seed 42 --no_plots
 
+[FINAL REPORT]
+
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 100 --hidden_dim 128 --num_layers 3 --lr 1e-3 --dropout 0.3 --output_dir sentiment/out/experiments/lstm_layers_3 --seed 42 --no_plots
+
+[EXPLORATORY / NOT INCLUDED IN FINAL REPORT]
 
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 100 --hidden_dim 128 --num_layers 1 --unidirectional --lr 1e-3 --dropout 0.3 --output_dir sentiment/out/experiments/lstm_unidirectional --seed 42 --no_plots
 
 
-4) LSTM regularization / overfitting checks
+4) LSTM regularization / overfitting checks [FINAL REPORT]
 
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 100 --hidden_dim 128 --num_layers 1 --lr 1e-3 --dropout 0.5 --output_dir sentiment/out/experiments/lstm_dropout_0_5 --seed 42 --no_plots
 
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 100 --hidden_dim 128 --num_layers 1 --lr 1e-3 --dropout 0.3 --weight_decay 1e-4 --output_dir sentiment/out/experiments/lstm_weight_decay_1e-4 --seed 42 --no_plots
+
+[EXPLORATORY / NOT INCLUDED IN FINAL REPORT]
 
 python3 sentiment/train.py --model lstm --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100000 --max_test 20000 --epochs 3 --max_len 256 --batch_size 64 --embed_dim 100 --hidden_dim 128 --num_layers 1 --lr 1e-3 --dropout 0.3 --freeze_embedding --output_dir sentiment/out/experiments/lstm_freeze_embedding --seed 42 --no_plots
 
 
 5) RoBERTa reduced experiments for laptop feasibility
 
-Install the pinned Transformers version first:
-  python3 -m pip install -r sentiment/requirements.txt
+Smoke test. It uses a tiny RoBERTa-like checkpoint to verify the pipeline without loading roberta-base:
 
-Start with this smoke test. It uses a tiny RoBERTa-like checkpoint to verify the
-pipeline without loading roberta-base:
+[FINAL REPORT, PIPELINE SMOKE TEST]
 
 python3 sentiment/train.py --model roberta --transformer_model sshleifer/tiny-distilroberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 100 --max_test 100 --epochs 1 --max_len 64 --batch_size 2 --lr 2e-5 --num_layers_to_freeze -1 --output_dir sentiment/out/experiments/roberta_tiny_smoke --seed 42 --no_plots
 
-If the smoke test works, run roberta-base with only the classification head trainable:
+roberta-base with only the classification head trainable:
+
+[FINAL REPORT]
 
 python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 500 --max_test 500 --epochs 1 --max_len 64 --batch_size 2 --lr 2e-5 --num_layers_to_freeze -1 --output_dir sentiment/out/experiments/roberta_head_only_500 --seed 42 --no_plots
 
-Then try partial fine-tuning by freezing the first 10 encoder layers:
+partial fine-tuning by freezing the first 10 encoder layers:
 
-python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 1000 --max_test 500 --epochs 1 --max_len 128 --batch_size 4 --lr 2e-5 --num_layers_to_freeze 10 --output_dir sentiment/out/experiments/roberta_freeze_10_1k --seed 42 --no_plots
+[FINAL REPORT]
 
-Only if the previous runs are stable, try full fine-tuning on a tiny subset:
+python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 1000 --max_test 1000 --epochs 1 --max_len 128 --batch_size 2 --lr 2e-5 --num_layers_to_freeze 10 --output_dir sentiment/out/experiments/roberta_freeze_10_1k --seed 42 --no_plots
+
+python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 5000 --max_test 2000 --epochs 1 --max_len 128 --batch_size 2 --lr 2e-5 --num_layers_to_freeze 10 --output_dir sentiment/out/experiments/roberta_freeze_10_5k --seed 42 --no_plots
+
+[FINAL REPORT]
+
+python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 5000 --max_test 2000 --epochs 1 --max_len 128 --batch_size 2 --lr 1e-5 --num_layers_to_freeze 8 --output_dir sentiment/out/experiments/roberta_freeze_8_5k --seed 42 --no_plots
+
+python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 5000 --max_test 2000 --epochs 2 --max_len 128 --batch_size 2 --lr 1e-5 --num_layers_to_freeze 8 --output_dir sentiment/out/experiments/roberta_freeze_8_5k_epochs2 --seed 42 --no_plots
+
+full fine-tuning on a tiny subset:
+
+[EXPLORATORY / NOT INCLUDED IN FINAL REPORT]
 
 python3 sentiment/train.py --model roberta --transformer_model roberta-base --train sentiment/data/train.ft.txt --test sentiment/data/test.ft.txt --max_train 1000 --max_test 500 --epochs 1 --max_len 128 --batch_size 2 --lr 2e-5 --num_layers_to_freeze 0 --output_dir sentiment/out/experiments/roberta_full_finetune_1k --seed 42 --no_plots
-
-On Apple Silicon, you can try adding --device mps. If it crashes or becomes
-unstable, remove it and use CPU with a smaller batch size.

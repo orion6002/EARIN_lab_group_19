@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[conference]{IEEEtran}
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
 \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
@@ -10,13 +10,16 @@
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
 \usepackage{graphicx}       % figures
+\usepackage{balance}        % balance final two-column page
 \graphicspath{{./}{final_report/}}
 
-\title{Final Report - Project 7\\Sentiment Analysis}
+\title{Sentiment Analysis on Amazon Reviews: Classical, Recurrent, and Transformer-Based Models}
 
 \author{
-  Group 19 \\
-  Nolan Capomaggio and Mathis Morra-Fischer \\
+\IEEEauthorblockN{Nolan Capomaggio and Mathis Morra-Fischer}
+\IEEEauthorblockA{Group 19\\
+Introduction to Artificial Intelligence\\
+Project 7}
 }
 
 
@@ -33,12 +36,17 @@ RoBERTa fine-tuning experiments. The final experiments focus on reproducibility,
 dataset-size reduction, hyperparameter sensitivity, regularization, and
 computational cost. Logistic Regression remains the strongest practical
 baseline, reaching 94.07\% accuracy on the full test set. On a 100k-sample
-experiment, Logistic Regression reaches 91.34\% test accuracy in 11.6 seconds,
-while the best LSTM configuration reaches 90.71\% but requires around 9
-minutes. The best reduced RoBERTa experiment reaches 94.25\% test accuracy on a
-5k-sample setup, but requires substantially more runtime than Logistic
-Regression.
+experiment, where 100,000 examples are loaded before the validation split,
+Logistic Regression reaches 91.34\% test accuracy in 11.6 seconds, while the
+best LSTM configuration reaches 90.71\% but requires around 9 minutes. The best
+reduced RoBERTa experiment reaches 94.25\% test accuracy on a 5k-sample setup,
+but uses a smaller test subset and requires substantially more runtime than
+Logistic Regression.
 \end{abstract}
+
+\begin{IEEEkeywords}
+sentiment analysis, Amazon reviews, TF-IDF, Logistic Regression, LSTM, RoBERTa
+\end{IEEEkeywords}
 
 \section{Introduction}
 Sentiment analysis is a standard Natural Language Processing task where the
@@ -51,6 +59,14 @@ TF-IDF is used as a fast and interpretable baseline. LSTM models are used to
 test whether sequence modeling improves performance. A RoBERTa pipeline is used
 to evaluate whether partial transformer fine-tuning improves accuracy enough to
 justify its additional cost.
+
+Existing solutions for sentiment classification commonly range from sparse
+linear models, such as TF-IDF with Support Vector Machines or Logistic
+Regression, to recurrent neural networks and transformer encoders. Published
+leaderboard-style results on the Amazon Reviews polarity task are usually high,
+often above 94\% accuracy for strong models, so we use this range as a rough
+upper-bound target while focusing on a fair cost/performance comparison under
+our available hardware constraints.
 
 \section{Dataset and Preprocessing}
 We use the Amazon Reviews dataset from Kaggle by Adam Bittlingmayer. The
@@ -66,6 +82,11 @@ The training file is split into train and validation subsets using a stratified
 80/20 split. This preserves the 50/50 class balance. All experiments use seed
 42 unless otherwise stated. The code fixes Python, NumPy, and PyTorch random
 seeds, and passes the seed to the model-specific training components.
+
+In the tables below, ``loaded train examples'' refers to the value passed to
+\texttt{--max\_train} before the 80/20 validation split. For example, a
+100,000-example run trains on approximately 80,000 examples and validates on
+approximately 20,000 examples.
 
 The shared preprocessing removes HTML tags, lowercases the text, and normalizes
 whitespace. Punctuation is kept because it may carry sentiment information.
@@ -134,7 +155,7 @@ The experiments are organized around the following questions:
 Table~\ref{tab:logreg-data} shows that Logistic Regression performs well even
 with a small fraction of the training set.
 
-\begin{table}[h]
+\begin{table*}[t]
   \centering
   \caption{Logistic Regression results when reducing the training set size.}
   \label{tab:logreg-data}
@@ -148,7 +169,7 @@ with a small fraction of the training set.
     Full dataset & 400,000 & 0.9407 & 465.00 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 \begin{figure}[h]
   \centering
@@ -157,16 +178,18 @@ with a small fraction of the training set.
   \label{fig:logreg-data}
 \end{figure}
 
-The first important finding is that only 2,000 loaded training examples already
-give 81.45\% test accuracy. This is above the 70--80\% threshold discussed at
-the midterm. Increasing the dataset to 100,000 examples improves accuracy to
-91.34\%, and the full-dataset run reached 94.07\% in 465 seconds.
+The first important finding is that only 2,000 loaded training examples, about
+1,600 actual training examples after the validation split, already give 81.45\%
+test accuracy. This is above the 70--80\% threshold discussed at the midterm.
+Increasing the dataset to 100,000 loaded examples improves accuracy to 91.34\%,
+and the full-dataset run reached 94.07\% in 465 seconds.
 
 \subsection{LSTM Hyperparameter Experiments}
-All LSTM experiments below use 100,000 loaded training examples, 20,000 test
+All LSTM experiments below use 100,000 loaded training examples, which gives
+about 80,000 actual training examples after the validation split, 20,000 test
 examples, 3 epochs, seed 42, and sequence length 256.
 
-\begin{table}[h]
+\begin{table*}[t]
   \centering
   \small
   \caption{LSTM experiment results.}
@@ -182,7 +205,7 @@ examples, 3 epochs, seed 42, and sequence length 256.
     BiLSTM, weight decay=$10^{-4}$ & 0.9014 & 0.9010 & 0.9023 & 535.75 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 \begin{figure}[h]
   \centering
@@ -195,9 +218,11 @@ examples, 3 epochs, seed 42, and sequence length 256.
 Table~\ref{tab:roberta-results} shows the reduced RoBERTa experiments. The
 first run freezes the whole encoder and trains only the classification head.
 The later runs unfreeze the top transformer layers, which gives the model
-enough capacity to adapt to the sentiment task.
+enough capacity to adapt to the sentiment task. These runs were intentionally
+performed on smaller subsets than the Logistic Regression and LSTM experiments
+because RoBERTa was much more expensive to train on the available laptop.
 
-\begin{table}[h]
+\begin{table*}[t]
   \centering
   \caption{Reduced RoBERTa fine-tuning results.}
   \label{tab:roberta-results}
@@ -213,7 +238,7 @@ enough capacity to adapt to the sentiment task.
     Freeze 8 layers & 5,000 & 2,000 & 2 & 0.9425 & 707.03 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 The head-only run is close to random guessing. This is expected because the
 classification head starts from random weights while the frozen encoder cannot
@@ -275,19 +300,26 @@ baseline features are already very informative.
 \subsection{RoBERTa Trade-off}
 RoBERTa becomes the strongest reduced-data model once upper layers are unfrozen.
 The best RoBERTa run reaches 94.25\% test accuracy with only 5,000 loaded
-training examples, which is higher than Logistic Regression on 100,000 loaded
-examples. However, this comes at a much higher computational cost: the 2-epoch
-RoBERTa run takes 707 seconds, compared with 11.57 seconds for Logistic
-Regression on 100,000 examples. This shows that transformer fine-tuning can
-improve accuracy, but the improvement must be weighed against runtime and
-hardware requirements.
+training examples. This number is higher than Logistic Regression on the
+100,000-loaded-example setup, but the comparison is not fully controlled:
+RoBERTa is evaluated on a 2,000-example test subset, while the Logistic
+Regression 100k experiment uses 20,000 test examples and the full Logistic
+Regression run uses the official 400,000-example test set. Therefore, the
+RoBERTa result should be interpreted as evidence that transformer fine-tuning is
+promising in a reduced-data setting, not as proof that it beats Logistic
+Regression on the full benchmark. It also comes at a much higher computational
+cost: the 2-epoch RoBERTa run takes 707 seconds, compared with 11.57 seconds
+for Logistic Regression on 100,000 loaded examples.
 
 \section{Limitations}
-RoBERTa was evaluated only on reduced subsets, not on the full dataset. This
-means the reported RoBERTa result should be interpreted as a strong reduced-data
-experiment, not as a full benchmark of the transformer model. Full fine-tuning
-on the complete dataset would likely require more memory and more time than was
-available on the laptop.
+RoBERTa was evaluated only on reduced training and test subsets, not on the full
+dataset. This means the reported RoBERTa result should be interpreted as a
+strong reduced-data experiment, not as a full benchmark of the transformer
+model. The RoBERTa and Logistic Regression numbers are useful for analyzing
+accuracy/runtime trade-offs, but they are not perfectly comparable unless they
+use the same training size, test size, number of epochs, and hardware. Full
+fine-tuning on the complete dataset would likely require more memory and more
+time than was available on the laptop.
 
 Another limitation is that we did not perform a full grid search. Instead, we
 selected targeted experiments based on the midterm feedback: dataset reduction,
@@ -298,7 +330,8 @@ The final project implemented a complete reproducible sentiment classification
 pipeline and compared classical and neural approaches. Logistic Regression with
 TF-IDF is a very strong baseline: it reaches 94.07\% accuracy on the full test
 set in 465 seconds, and already reaches 91.34\% with only 100,000 loaded
-training examples.
+training examples, corresponding to about 80,000 actual training examples after
+the validation split.
 
 The LSTM experiments show that neural sequence models are sensitive to
 hyperparameters. A learning rate of $10^{-3}$ works much better than
@@ -314,4 +347,35 @@ while RoBERTa gives the best accuracy in our reduced experiments but requires
 significantly more compute. More complex models must be justified not only by
 accuracy, but also by runtime, hardware requirements, and practical usefulness.
 
+\begin{thebibliography}{9}
+
+\bibitem{amazonreviews}
+Adam Bittlingmayer.
+\textit{Amazon Reviews for Sentiment Analysis}.
+Kaggle Dataset.
+\url{https://www.kaggle.com/datasets/bittlingmayer/amazonreviews}
+
+\bibitem{scikit-learn}
+F. Pedregosa et al.
+\textit{Scikit-learn: Machine Learning in Python}.
+Journal of Machine Learning Research, 12:2825--2830, 2011.
+
+\bibitem{pytorch}
+Adam Paszke et al.
+\textit{PyTorch: An Imperative Style, High-Performance Deep Learning Library}.
+Advances in Neural Information Processing Systems, 2019.
+
+\bibitem{transformers}
+Thomas Wolf et al.
+\textit{Transformers: State-of-the-Art Natural Language Processing}.
+Proceedings of EMNLP: System Demonstrations, 2020.
+
+\bibitem{roberta}
+Yinhan Liu et al.
+\textit{RoBERTa: A Robustly Optimized BERT Pretraining Approach}.
+arXiv preprint arXiv:1907.11692, 2019.
+
+\end{thebibliography}
+
+\balance
 \end{document}
